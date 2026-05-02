@@ -1,0 +1,101 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+
+# Build
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+share/python-wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# Instaladores
+*.manifest
+*.spec
+pip-log.txt
+pip-delete-this-directory.txt
+
+# Tests
+htmlcov/
+.tox/
+.nox/
+.coverage
+.coverage.*
+.cache
+nosetests.xml
+coverage.xml
+*.cover
+.hypothesis/
+.pytest_cache/
+
+# Traducciones
+*.mo
+*.pot
+
+# Entornos
+.env
+.venv
+env/
+venv/
+ENV/
+env.bak/
+venv.bak/
+.python-version
+
+# Celery
+celerybeat.pid
+celerybeat-schedule
+
+# Tipado
+.mypy_cache/
+.dmypy.json
+dmypy.json
+.pyre/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# Sistema
+.DS_Store
+Desktop.ini
+Thumbs.db
+
+# Django
+*.log
+local_settings.py
+local_settings/
+db.sqlite3
+db.sqlite3-journal
+media/
+staticfiles/
+
+# Vue
+dist/
+dist-ssr/
+*.local
+.parcel-cache/
+node_modules/
+.pnpm-store/
+.nuxt/
+.output/
+storybook-static/
+vite-temp/
