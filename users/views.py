@@ -1,26 +1,21 @@
 from rest_framework import status, viewsets
 from rest_framework.decorators import action
 from rest_framework.filters import OrderingFilter, SearchFilter
-from rest_framework.generics import ListAPIView, RetrieveUpdateAPIView
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
-from rest_framework_simplejwt.views import TokenRefreshView
 
-from .models import CustomUser
-from .pagination import MembersPagination
+from config.pagination import Pagination
+from .models import CustomUser, Membership_Type
 from .permissions import IsOperatorAdmin
-from .serializers import AdminMemberDetailSerializer, MemberListSerializer, UserSerializer
+from .serializers import (
+    AdminMemberDetailSerializer,
+    MemberListSerializer,
+    UserSerializer,
+    MembershipTypeSerializer,
+)
 
 
-# Vista para obtener y actualizar datos de un miembro concreto (solo admins)
-class AdminMemberDetailAPIView(RetrieveUpdateAPIView):
-    permission_classes = [IsOperatorAdmin]
-    serializer_class = AdminMemberDetailSerializer
-    queryset = CustomUser.objects.all()
-    lookup_field = "email"
-
-
-# ViewSet para gestionar operaciones del usuario autenticado
+# region User
 class UserViewSet(viewsets.ViewSet):
 
     # Vista para obtener datos del usuario autenticado
@@ -62,19 +57,133 @@ class UserViewSet(viewsets.ViewSet):
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 
-# Vista para listar miembros activos, excluyendo al usuario autenticado
-class MembersListAPIView(ListAPIView):
+# region Member
+class MembersViewSet(viewsets.ViewSet):
     permission_classes = [IsOperatorAdmin]
-    serializer_class = MemberListSerializer
-    pagination_class = MembersPagination
-    filter_backends = [SearchFilter, OrderingFilter]
+    filters = [SearchFilter, OrderingFilter]
     search_fields = ["first_name", "last_name", "email", "nif_cif"]
     ordering_fields = ["first_name", "last_name", "email", "id"]
     ordering = ["first_name", "last_name"]
 
+    # Queryset base: todos los usuarios excepto el admin que hace la peticion
     def get_queryset(self):
-        return (
-            CustomUser.objects
-            .exclude(pk=self.request.user.pk)
-            .order_by("first_name", "last_name")
-        )
+        return CustomUser.objects.exclude(pk=self.request.user.pk)
+
+    # Vista para listar miembros con busqueda, ordenacion y paginacion
+    def list(self, request):
+        queryset = self.get_queryset()
+
+        # Aplicar filtros de busqueda y ordenacion manualmente
+        for filter in self.filters:
+            queryset = filter().filter_queryset(request, queryset, self)
+
+        # Paginacion
+        paginator = Pagination()
+        page = paginator.paginate_queryset(queryset, request)
+        serializer = MemberListSerializer(page, many=True)
+        return paginator.get_paginated_response(serializer.data)
+
+    # Vista para obtener el detalle completo de un miembro por email
+    def retrieve(self, request, email=None):
+        try:
+            member = CustomUser.objects.get(email=email)
+        except CustomUser.DoesNotExist:
+            return Response({"detail": "Miembro no encontrado."}, status=status.HTTP_404_NOT_FOUND)
+        serializer = AdminMemberDetailSerializer(member)
+        return Response(serializer.data)
+
+    # Vista para actualizar los datos de un miembro por email
+    def update(self, request, email=None):
+        try:
+            member = CustomUser.objects.get(email=email)
+        except CustomUser.DoesNotExist:
+            return Response({"detail": "Miembro no encontrado."}, status=status.HTTP_404_NOT_FOUND)
+        serializer = AdminMemberDetailSerializer(member, data=request.data, partial=True)
+        if serializer.is_valid():
+            serializer.save()
+            return Response(serializer.data)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+    # Vista para eliminar un miembro por email
+    @action(detail=False, methods=["delete"], url_path="delete")
+    def delete(self, request):
+        email = request.data.get("email")
+        if not email:
+            return Response({"detail": "El campo 'email' es obligatorio."}, status=status.HTTP_400_BAD_REQUEST)
+
+        try:
+            member = CustomUser.objects.get(email=email)
+        except CustomUser.DoesNotExist:
+            return Response({"detail": "Miembro no encontrado."}, status=status.HTTP_404_NOT_FOUND)
+
+        member.delete()
+        return Response({"detail": "Miembro eliminado correctamente."}, status=status.HTTP_204_NO_CONTENT)
+
+
+# region MembershipType
+class MembershipTypesViewSet(viewsets.ViewSet):
+    permission_classes = [IsAuthenticated]
+
+    def get_queryset(self):
+        return Membership_Type.objects.all()
+
+    # Obtener todos los tipos de membresia (activos e inactivos)
+    @action(detail=False, methods=["get"], url_path="all", permission_classes=[IsOperatorAdmin])
+    def all(self, request):
+        queryset = self.get_queryset().order_by("name")
+        paginator = Pagination()
+        page = paginator.paginate_queryset(queryset, request)
+        serializer = MembershipTypeSerializer(page, many=True)
+        return paginator.get_paginated_response(serializer.data)
+
+    # Obtener solo los tipos de membresia activos
+    @action(detail=False, methods=["get"], url_path="active")
+    def active(self, request):
+        queryset = self.get_queryset().filter(is_active=True).order_by("name")
+        paginator = Pagination()
+        page = paginator.paginate_queryset(queryset, request)
+        serializer = MembershipTypeSerializer(page, many=True)
+        return paginator.get_paginated_response(serializer.data)
+
+    # Crear un tipo de membresia (solo admin)
+    @action(detail=False, methods=["post"], url_path="create", permission_classes=[IsOperatorAdmin])
+    def create(self, request):
+        serializer = MembershipTypeSerializer(data=request.data)
+        if serializer.is_valid():
+            serializer.save()
+            return Response(serializer.data, status=status.HTTP_201_CREATED)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+    # Modificar un tipo de membresia por name (solo admin)
+    # Se pasa 'name' para buscar y 'new_name' para cambiar el nombre
+    @action(detail=False, methods=["put", "patch"], url_path="update", permission_classes=[IsOperatorAdmin])
+    def update(self, request):
+        name = request.data.get("name")
+        if not name:
+            return Response({"detail": "El campo 'name' es obligatorio."}, status=status.HTTP_400_BAD_REQUEST)
+
+        try:
+            membership_type = Membership_Type.objects.get(name=name)
+        except Membership_Type.DoesNotExist:
+            return Response({"detail": "Tipo de membresia no encontrado."}, status=status.HTTP_404_NOT_FOUND)
+
+        serializer = MembershipTypeSerializer(membership_type, data=request.data, partial=True)
+        if serializer.is_valid():
+            serializer.save()
+            return Response(serializer.data)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+    # Eliminar un tipo de membresia por name (solo admin)
+    @action(detail=False, methods=["delete"], url_path="delete", permission_classes=[IsOperatorAdmin])
+    def delete(self, request):
+        name = request.data.get("name")
+        if not name:
+            return Response({"detail": "El campo 'name' es obligatorio."}, status=status.HTTP_400_BAD_REQUEST)
+
+        try:
+            membership_type = Membership_Type.objects.get(name=name)
+        except Membership_Type.DoesNotExist:
+            return Response({"detail": "Tipo de membresia no encontrado."}, status=status.HTTP_404_NOT_FOUND)
+
+        membership_type.delete()
+        return Response({"detail": "Tipo de membresia eliminado correctamente."}, status=status.HTTP_204_NO_CONTENT)

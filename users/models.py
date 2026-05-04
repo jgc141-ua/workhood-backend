@@ -87,7 +87,8 @@ class Payment(models.Model):
 class Membership_Type(models.Model):
     id = models.AutoField(primary_key=True)
     name = models.CharField(max_length=50, unique=True)
-    monthly_price = models.DecimalField(max_digits=10, decimal_places=2)
+    description = models.TextField(max_length=100, blank=True)
+    monthly_price = models.DecimalField(max_digits=6, decimal_places=2)
     is_fixed = models.BooleanField(default=False)
     is_active = models.BooleanField(default=True)
 
