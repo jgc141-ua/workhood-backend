@@ -89,22 +89,25 @@ class Membership_Type(models.Model):
     name = models.CharField(max_length=50, unique=True)
     monthly_price = models.DecimalField(max_digits=10, decimal_places=2)
     is_fixed = models.BooleanField(default=False)
-    is_active = models.BooleanField(default=False)
-
-# Benefit model to define benefits associated with membership types
-class Benefit(models.Model):
-    id = models.AutoField(primary_key=True)
-    name = models.CharField(max_length=100, unique=True)
-    is_active = models.BooleanField(default=False)
-
-    # Relationship
-    membership_type = models.ManyToManyField(Membership_Type, related_name='membership_type_benefits')
+    is_active = models.BooleanField(default=True)
 
 # Resource_Type model to define different types of resources available for reservation
 class Resource_Type(models.Model):
     id = models.AutoField(primary_key=True)
     name = models.CharField(max_length=50, unique=True)
     description = models.TextField(blank=True, null=True)
+
+# Benefit model to define benefits associated with membership types
+class Benefit(models.Model):
+    id = models.AutoField(primary_key=True)
+    name = models.CharField(max_length=100, unique=True)
+    description = models.TextField(blank=True)
+    quantity = models.PositiveIntegerField(blank=True, null=True, help_text="Cantidad incluida. Null = ilimitado.")
+    is_active = models.BooleanField(default=True)
+
+    # Relationships
+    resource_type = models.ForeignKey(Resource_Type, on_delete=models.PROTECT, related_name='benefits', null=True, blank=True)
+    membership_type = models.ManyToManyField(Membership_Type, related_name='membership_type_benefits')
 
 # Resource model to define resources that can be reserved by users
 class Resource(models.Model):
