@@ -5,13 +5,14 @@ from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 
 from config.pagination import Pagination
-from .models import CustomUser, Membership_Type
+from .models import Benefit, CustomUser, Membership_Type
 from .permissions import IsOperatorAdmin
 from .serializers import (
     AdminMemberDetailSerializer,
     MemberListSerializer,
     UserSerializer,
     MembershipTypeSerializer,
+    BenefitSerializer,
 )
 
 
@@ -187,3 +188,62 @@ class MembershipTypesViewSet(viewsets.ViewSet):
 
         membership_type.delete()
         return Response({"detail": "Tipo de membresia eliminado correctamente."}, status=status.HTTP_204_NO_CONTENT)
+
+
+# region Benefit
+class BenefitsViewSet(viewsets.ViewSet):
+    permission_classes = [IsAuthenticated]
+
+    def get_queryset(self):
+        return Benefit.objects.all()
+
+    # Obtener todos los beneficios
+    @action(detail=False, methods=["get"], url_path="all", permission_classes=[IsOperatorAdmin])
+    def all(self, request):
+        queryset = self.get_queryset().order_by("name")
+        paginator = Pagination()
+        page = paginator.paginate_queryset(queryset, request)
+        serializer = BenefitSerializer(page, many=True)
+        return paginator.get_paginated_response(serializer.data)
+
+    # Crear un beneficio (solo admin)
+    @action(detail=False, methods=["post"], url_path="create", permission_classes=[IsOperatorAdmin])
+    def create(self, request):
+        serializer = BenefitSerializer(data=request.data)
+        if serializer.is_valid():
+            serializer.save()
+            return Response(serializer.data, status=status.HTTP_201_CREATED)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+    # Modificar un beneficio por name (solo admin)
+    @action(detail=False, methods=["put", "patch"], url_path="update", permission_classes=[IsOperatorAdmin])
+    def update(self, request):
+        name = request.data.get("name")
+        if not name:
+            return Response({"detail": "El campo 'name' es obligatorio."}, status=status.HTTP_400_BAD_REQUEST)
+
+        try:
+            benefit = Benefit.objects.get(name=name)
+        except Benefit.DoesNotExist:
+            return Response({"detail": "Beneficio no encontrado."}, status=status.HTTP_404_NOT_FOUND)
+
+        serializer = BenefitSerializer(benefit, data=request.data, partial=True)
+        if serializer.is_valid():
+            serializer.save()
+            return Response(serializer.data)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+    # Eliminar un beneficio por name (solo admin)
+    @action(detail=False, methods=["delete"], url_path="delete", permission_classes=[IsOperatorAdmin])
+    def delete(self, request):
+        name = request.data.get("name")
+        if not name:
+            return Response({"detail": "El campo 'name' es obligatorio."}, status=status.HTTP_400_BAD_REQUEST)
+
+        try:
+            benefit = Benefit.objects.get(name=name)
+        except Benefit.DoesNotExist:
+            return Response({"detail": "Beneficio no encontrado."}, status=status.HTTP_404_NOT_FOUND)
+
+        benefit.delete()
+        return Response({"detail": "Beneficio eliminado correctamente."}, status=status.HTTP_204_NO_CONTENT)

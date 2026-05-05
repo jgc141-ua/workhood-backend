@@ -2,7 +2,7 @@ from django.contrib import admin
 from django.urls import path
 from rest_framework_simplejwt.views import TokenObtainPairView, TokenRefreshView
 
-from users.views import MembershipTypesViewSet, MembersViewSet, UserViewSet
+from users.views import BenefitsViewSet, MembershipTypesViewSet, MembersViewSet, UserViewSet
 
 urlpatterns = [
     #path("admin/", admin.site.urls),
@@ -19,4 +19,8 @@ urlpatterns = [
     path("membership-types/create/", MembershipTypesViewSet.as_view({"post": "create"}), name="create_membership_type"),
     path("membership-types/update/", MembershipTypesViewSet.as_view({"put": "update", "patch": "update"}), name="update_membership_type"),
     path("membership-types/delete/", MembershipTypesViewSet.as_view({"delete": "delete"}), name="delete_membership_type"),
+    path("benefits/all/", BenefitsViewSet.as_view({"get": "all"}), name="all_benefits"),
+    path("benefits/create/", BenefitsViewSet.as_view({"post": "create"}), name="create_benefit"),
+    path("benefits/update/", BenefitsViewSet.as_view({"put": "update", "patch": "update"}), name="update_benefit"),
+    path("benefits/delete/", BenefitsViewSet.as_view({"delete": "delete"}), name="delete_benefit"),
 ]

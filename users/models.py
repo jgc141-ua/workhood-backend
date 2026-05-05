@@ -101,10 +101,9 @@ class Resource_Type(models.Model):
 # Benefit model to define benefits associated with membership types
 class Benefit(models.Model):
     id = models.AutoField(primary_key=True)
-    name = models.CharField(max_length=100, unique=True)
-    description = models.TextField(blank=True)
+    name = models.CharField(max_length=50, unique=True)
+    description = models.TextField(max_length=100, blank=True)
     quantity = models.PositiveIntegerField(blank=True, null=True, help_text="Cantidad incluida. Null = ilimitado.")
-    is_active = models.BooleanField(default=True)
 
     # Relationships
     resource_type = models.ForeignKey(Resource_Type, on_delete=models.PROTECT, related_name='benefits', null=True, blank=True)

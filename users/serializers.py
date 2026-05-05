@@ -3,7 +3,7 @@ from django.contrib.auth import get_user_model
 from django.db import transaction
 from rest_framework import serializers
 
-from .models import Address, CustomUser, Role, Legal, Membership_Type
+from .models import Address, Benefit, CustomUser, Role, Legal, Membership_Type
 from .utils.validators import (
     validate_email_format,
     validate_phone_format,
@@ -349,5 +349,44 @@ class MembershipTypeSerializer(serializers.ModelSerializer):
     def update(self, instance, validated_data):
         new_name = validated_data.pop('new_name', None)
         if new_name:
+            validated_data.pop('name', None)
+            instance.name = new_name
+        return super().update(instance, validated_data)
+
+
+# region Benefit
+class BenefitSerializer(serializers.ModelSerializer):
+    new_name = serializers.CharField(required=False, allow_blank=True)
+
+    class Meta:
+        model = Benefit
+        fields = (
+            "id",
+            "name",
+            "new_name",
+            "description",
+            "quantity",
+        )
+
+        extra_kwargs = {
+            'id': {'read_only': True},
+            'name': {'required': True},
+            'description': {'required': False},
+            'quantity': {'required': False},
+        }
+
+    def validate(self, data):
+        name = data.get('name')
+        new_name = data.get('new_name')
+
+        if new_name:
+            if Benefit.objects.filter(name=new_name).exclude(name=name).exists():
+                raise serializers.ValidationError({"new_name": "Ya existe un beneficio con ese nombre."})
+        return data
+
+    def update(self, instance, validated_data):
+        new_name = validated_data.pop('new_name', None)
+        if new_name:
+            validated_data.pop('name', None)
             instance.name = new_name
         return super().update(instance, validated_data)
