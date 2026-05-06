@@ -5,7 +5,7 @@ from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 
 from config.pagination import Pagination
-from .models import Benefit, CustomUser, Membership_Type
+from .models import Benefit, CustomUser, Membership_Type, Resource, Resource_Type
 from .permissions import IsOperatorAdmin
 from .serializers import (
     AdminMemberDetailSerializer,
@@ -13,6 +13,8 @@ from .serializers import (
     UserSerializer,
     MembershipTypeSerializer,
     BenefitSerializer,
+    ResourceTypeSerializer,
+    ResourceSerializer,
 )
 
 
@@ -247,3 +249,121 @@ class BenefitsViewSet(viewsets.ViewSet):
 
         benefit.delete()
         return Response({"detail": "Beneficio eliminado correctamente."}, status=status.HTTP_204_NO_CONTENT)
+
+
+# region ResourceType
+class ResourceTypesViewSet(viewsets.ViewSet):
+    permission_classes = [IsAuthenticated]
+
+    def get_queryset(self):
+        return Resource_Type.objects.all()
+
+    # Obtener todos los tipos de recurso
+    @action(detail=False, methods=["get"], url_path="all", permission_classes=[IsOperatorAdmin])
+    def all(self, request):
+        queryset = self.get_queryset().order_by("name")
+        paginator = Pagination()
+        page = paginator.paginate_queryset(queryset, request)
+        serializer = ResourceTypeSerializer(page, many=True)
+        return paginator.get_paginated_response(serializer.data)
+
+    # Crear un tipo de recurso (solo admin)
+    @action(detail=False, methods=["post"], url_path="create", permission_classes=[IsOperatorAdmin])
+    def create(self, request):
+        serializer = ResourceTypeSerializer(data=request.data)
+        if serializer.is_valid():
+            serializer.save()
+            return Response(serializer.data, status=status.HTTP_201_CREATED)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+    # Modificar un tipo de recurso por name (solo admin)
+    @action(detail=False, methods=["put", "patch"], url_path="update", permission_classes=[IsOperatorAdmin])
+    def update(self, request):
+        name = request.data.get("name")
+        if not name:
+            return Response({"detail": "El campo 'name' es obligatorio."}, status=status.HTTP_400_BAD_REQUEST)
+
+        try:
+            resource_type = Resource_Type.objects.get(name=name)
+        except Resource_Type.DoesNotExist:
+            return Response({"detail": "Tipo de recurso no encontrado."}, status=status.HTTP_404_NOT_FOUND)
+
+        serializer = ResourceTypeSerializer(resource_type, data=request.data, partial=True)
+        if serializer.is_valid():
+            serializer.save()
+            return Response(serializer.data)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+    # Eliminar un tipo de recurso por name (solo admin)
+    @action(detail=False, methods=["delete"], url_path="delete", permission_classes=[IsOperatorAdmin])
+    def delete(self, request):
+        name = request.data.get("name")
+        if not name:
+            return Response({"detail": "El campo 'name' es obligatorio."}, status=status.HTTP_400_BAD_REQUEST)
+
+        try:
+            resource_type = Resource_Type.objects.get(name=name)
+        except Resource_Type.DoesNotExist:
+            return Response({"detail": "Tipo de recurso no encontrado."}, status=status.HTTP_404_NOT_FOUND)
+
+        resource_type.delete()
+        return Response({"detail": "Tipo de recurso eliminado correctamente."}, status=status.HTTP_204_NO_CONTENT)
+
+
+# region Resource
+class ResourcesViewSet(viewsets.ViewSet):
+    permission_classes = [IsAuthenticated]
+
+    def get_queryset(self):
+        return Resource.objects.select_related('resource_type').all()
+
+    # Obtener todos los recursos
+    @action(detail=False, methods=["get"], url_path="all", permission_classes=[IsOperatorAdmin])
+    def all(self, request):
+        queryset = self.get_queryset().order_by("name")
+        paginator = Pagination()
+        page = paginator.paginate_queryset(queryset, request)
+        serializer = ResourceSerializer(page, many=True)
+        return paginator.get_paginated_response(serializer.data)
+
+    # Crear un recurso (solo admin)
+    @action(detail=False, methods=["post"], url_path="create", permission_classes=[IsOperatorAdmin])
+    def create(self, request):
+        serializer = ResourceSerializer(data=request.data)
+        if serializer.is_valid():
+            serializer.save()
+            return Response(serializer.data, status=status.HTTP_201_CREATED)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+    # Modificar un recurso por id (solo admin)
+    @action(detail=False, methods=["put", "patch"], url_path="update", permission_classes=[IsOperatorAdmin])
+    def update(self, request):
+        resource_id = request.data.get("id")
+        if not resource_id:
+            return Response({"detail": "El campo 'id' es obligatorio."}, status=status.HTTP_400_BAD_REQUEST)
+
+        try:
+            resource = Resource.objects.get(pk=resource_id)
+        except Resource.DoesNotExist:
+            return Response({"detail": "Recurso no encontrado."}, status=status.HTTP_404_NOT_FOUND)
+
+        serializer = ResourceSerializer(resource, data=request.data, partial=True)
+        if serializer.is_valid():
+            serializer.save()
+            return Response(serializer.data)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+    # Eliminar un recurso por id (solo admin)
+    @action(detail=False, methods=["delete"], url_path="delete", permission_classes=[IsOperatorAdmin])
+    def delete(self, request):
+        resource_id = request.data.get("id")
+        if not resource_id:
+            return Response({"detail": "El campo 'id' es obligatorio."}, status=status.HTTP_400_BAD_REQUEST)
+
+        try:
+            resource = Resource.objects.get(pk=resource_id)
+        except Resource.DoesNotExist:
+            return Response({"detail": "Recurso no encontrado."}, status=status.HTTP_404_NOT_FOUND)
+
+        resource.delete()
+        return Response({"detail": "Recurso eliminado correctamente."}, status=status.HTTP_204_NO_CONTENT)

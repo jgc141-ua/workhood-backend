@@ -2,7 +2,7 @@ from django.contrib import admin
 from django.urls import path
 from rest_framework_simplejwt.views import TokenObtainPairView, TokenRefreshView
 
-from users.views import BenefitsViewSet, MembershipTypesViewSet, MembersViewSet, UserViewSet
+from users.views import BenefitsViewSet, MembershipTypesViewSet, MembersViewSet, ResourcesViewSet, ResourceTypesViewSet, UserViewSet
 
 urlpatterns = [
     #path("admin/", admin.site.urls),
@@ -23,4 +23,12 @@ urlpatterns = [
     path("benefits/create/", BenefitsViewSet.as_view({"post": "create"}), name="create_benefit"),
     path("benefits/update/", BenefitsViewSet.as_view({"put": "update", "patch": "update"}), name="update_benefit"),
     path("benefits/delete/", BenefitsViewSet.as_view({"delete": "delete"}), name="delete_benefit"),
+    path("resource-types/all/", ResourceTypesViewSet.as_view({"get": "all"}), name="all_resource_types"),
+    path("resource-types/create/", ResourceTypesViewSet.as_view({"post": "create"}), name="create_resource_type"),
+    path("resource-types/update/", ResourceTypesViewSet.as_view({"put": "update", "patch": "update"}), name="update_resource_type"),
+    path("resource-types/delete/", ResourceTypesViewSet.as_view({"delete": "delete"}), name="delete_resource_type"),
+    path("resources/all/", ResourcesViewSet.as_view({"get": "all"}), name="all_resources"),
+    path("resources/create/", ResourcesViewSet.as_view({"post": "create"}), name="create_resource"),
+    path("resources/update/", ResourcesViewSet.as_view({"put": "update", "patch": "update"}), name="update_resource"),
+    path("resources/delete/", ResourcesViewSet.as_view({"delete": "delete"}), name="delete_resource"),
 ]

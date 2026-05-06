@@ -3,7 +3,7 @@ from django.contrib.auth import get_user_model
 from django.db import transaction
 from rest_framework import serializers
 
-from .models import Address, Benefit, CustomUser, Role, Legal, Membership_Type
+from .models import Address, Benefit, CustomUser, Resource, Resource_Type, Role, Legal, Membership_Type
 from .utils.validators import (
     validate_email_format,
     validate_phone_format,
@@ -390,3 +390,72 @@ class BenefitSerializer(serializers.ModelSerializer):
             validated_data.pop('name', None)
             instance.name = new_name
         return super().update(instance, validated_data)
+
+
+# region ResourceType
+class ResourceTypeSerializer(serializers.ModelSerializer):
+    new_name = serializers.CharField(required=False, allow_blank=True)
+
+    class Meta:
+        model = Resource_Type
+        fields = (
+            "id",
+            "name",
+            "new_name",
+            "description",
+        )
+
+        extra_kwargs = {
+            'id': {'read_only': True},
+            'name': {'required': True},
+            'description': {'required': False},
+        }
+
+    def validate(self, data):
+        name = data.get('name')
+        new_name = data.get('new_name')
+
+        if new_name:
+            if Resource_Type.objects.filter(name=new_name).exclude(name=name).exists():
+                raise serializers.ValidationError({"new_name": "Ya existe un tipo de recurso con ese nombre."})
+        return data
+
+    def update(self, instance, validated_data):
+        new_name = validated_data.pop('new_name', None)
+        if new_name:
+            validated_data.pop('name', None)
+            instance.name = new_name
+        return super().update(instance, validated_data)
+
+
+# region Resource
+class ResourceSerializer(serializers.ModelSerializer):
+    resource_type_name = serializers.CharField(source='resource_type.name', read_only=True)
+
+    class Meta:
+        model = Resource
+        fields = (
+            "id",
+            "name",
+            "description",
+            "capacity",
+            "availability",
+            "is_active",
+            "resource_type",
+            "resource_type_name",
+        )
+
+        extra_kwargs = {
+            'id': {'read_only': True},
+            'name': {'required': True},
+            'description': {'required': False},
+            'capacity': {'required': True},
+            'availability': {'required': False},
+            'is_active': {'required': False},
+            'resource_type': {'required': True},
+        }
+
+    def validate_capacity(self, value):
+        if value is not None and value < 1:
+            raise serializers.ValidationError("La capacidad debe ser mayor que 0.")
+        return value
