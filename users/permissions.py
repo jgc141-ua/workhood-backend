@@ -8,6 +8,5 @@ class IsOperatorAdmin(BasePermission):
         return (
             request.user
             and request.user.is_authenticated
-            and request.user.role
-            and request.user.role.name == "ADMIN"
+            and request.user.role == "ADMIN"
         )
