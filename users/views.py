@@ -207,7 +207,14 @@ class MembershipTypesViewSet(viewsets.ViewSet):
         except Membership_Type.DoesNotExist:
             return Response({"detail": "Tipo de membresia no encontrado."}, status=status.HTTP_404_NOT_FOUND)
 
-        membership_type.delete()
+        try:
+            membership_type.delete()
+        except ProtectedError:
+            return Response(
+                {"detail": "No se puede eliminar el tipo de membresía porque tiene usuarios suscritos."},
+                status=status.HTTP_409_CONFLICT,
+            )
+
         return Response({"detail": "Tipo de membresia eliminado correctamente."}, status=status.HTTP_204_NO_CONTENT)
 
 
