@@ -44,6 +44,7 @@ INSTALLED_APPS = [
     'dj_rest_auth',
     'corsheaders',
     'users',
+    'reservations',
 ]
 
 AUTH_USER_MODEL = 'users.CustomUser'

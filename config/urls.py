@@ -58,4 +58,6 @@ urlpatterns = [
     path("resources/create/", ResourcesViewSet.as_view({"post": "create"}), name="create_resource"),
     path("resources/update/", ResourcesViewSet.as_view({"put": "update", "patch": "update"}), name="update_resource"),
     path("resources/delete/", ResourcesViewSet.as_view({"delete": "delete"}), name="delete_resource"),
+
+    # region Reservations
 ]

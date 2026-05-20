@@ -140,15 +140,3 @@ class Membership(models.Model):
     resource = models.ForeignKey(Resource, on_delete=models.SET_NULL, related_name='membership_resources', null=True, blank=True)
 
 
-# region Reserva
-class Reservation(models.Model):
-    id = models.AutoField(primary_key=True)
-    start_time = models.DateTimeField()
-    end_time = models.DateTimeField()
-    state = models.CharField(max_length=20, default='Pending')
-    created_at = models.DateTimeField(auto_now_add=True)
-
-    # Relaciones
-    user = models.ForeignKey(CustomUser, on_delete=models.PROTECT, related_name='user_reservations')
-    resource = models.ForeignKey(Resource, on_delete=models.PROTECT, related_name='resource_reservations')
-    membership = models.ForeignKey(Membership, on_delete=models.PROTECT, related_name='membership_reservations')
