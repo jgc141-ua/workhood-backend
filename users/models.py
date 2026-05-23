@@ -31,7 +31,7 @@ class CustomUser(AbstractUser):
         (MIEMBRO_ITINERANTE, 'Miembro Itinerante'),
         (VISITANTE, 'Visitante'),
     ]
-    role = models.CharField(max_length=50, choices=ROLE_CHOICES, default=MIEMBRO)
+    role = models.CharField(max_length=50, choices=ROLE_CHOICES, default=MIEMBRO_ITINERANTE)
 
     # Relaciones
     address = models.ForeignKey(Address, on_delete=models.PROTECT, related_name='address')

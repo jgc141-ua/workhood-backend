@@ -52,4 +52,3 @@ class Reservation(models.Model):
     user = models.ForeignKey(CustomUser, on_delete=models.PROTECT, related_name='reservations')
     resource = models.ForeignKey(Resource, on_delete=models.PROTECT, related_name='reservations')
     membership = models.ForeignKey(Membership, on_delete=models.PROTECT, related_name='reservations', null=True, blank=True)
-    parent_reservation = models.ForeignKey('self', on_delete=models.CASCADE, related_name='occurrences', null=True, blank=True)

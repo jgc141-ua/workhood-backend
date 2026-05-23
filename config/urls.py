@@ -2,6 +2,7 @@ from django.contrib import admin
 from django.urls import path
 from rest_framework_simplejwt.views import TokenObtainPairView
 from users.views import BenefitsViewSet, MembershipsViewSet, MembershipTypesViewSet, MembersViewSet, ResourcesViewSet, ResourceTypesViewSet, UserViewSet, CustomTokenRefreshView
+from reservations.views import ReservationsViewSet, SpaceScheduleViewSet
 
 # Rutas principales de la API de WorkHood
 urlpatterns = [
@@ -60,4 +61,14 @@ urlpatterns = [
     path("resources/delete/", ResourcesViewSet.as_view({"delete": "delete"}), name="delete_resource"),
 
     # region Reservations
+    # Reservas de recursos por parte de los miembros
+    path("reservations/my/", ReservationsViewSet.as_view({"get": "my_reservations"}), name="my_reservations"),
+    path("reservations/create/", ReservationsViewSet.as_view({"post": "create_reservation"}), name="create_reservation"),
+    path("reservations/availability/", ReservationsViewSet.as_view({"get": "availability"}), name="availability"),
+
+    # Horarios del espacio (gestión admin)
+    path("space-schedule/all/", SpaceScheduleViewSet.as_view({"get": "all"}), name="all_space_schedules"),
+    path("space-schedule/create/", SpaceScheduleViewSet.as_view({"post": "create"}), name="create_space_schedule"),
+    path("space-schedule/update/", SpaceScheduleViewSet.as_view({"put": "update", "patch": "update"}), name="update_space_schedule"),
+    path("space-schedule/delete/", SpaceScheduleViewSet.as_view({"delete": "delete"}), name="delete_space_schedule"),
 ]

@@ -31,8 +31,22 @@ class UserViewSet(viewsets.ViewSet):
     # Vista para obtener datos del usuario autenticado
     @action(detail=False, methods=["get"], permission_classes=[IsAuthenticated])
     def me(self, request):
-        """Devuelve los datos del usuario autenticado."""
-        serializer = UserSerializer(request.user)
+        user = request.user
+
+        # Actualiza el rol si la membresía ha caducado o se ha activado
+        if user.role != CustomUser.ADMIN:
+            has_active_membership = Membership.objects.filter(
+                user=user,
+                is_active=True,
+                end_date__gte=timezone.now(),
+            ).exists()
+
+            expected_role = CustomUser.MIEMBRO if has_active_membership else CustomUser.MIEMBRO_ITINERANTE
+            if user.role != expected_role:
+                user.role = expected_role
+                user.save(update_fields=["role"])
+
+        serializer = UserSerializer(user)
         return Response(serializer.data)
 
     # Vista para actualizar datos del usuario autenticado
@@ -54,7 +68,7 @@ class UserViewSet(viewsets.ViewSet):
         if CustomUser.objects.count() == 0:
             data["role"] = "ADMIN"
         else:
-            data["role"] = "MIEMBRO"
+            data["role"] = "MIEMBRO_ITINERANTE"
 
         data["is_staff"] = False
         data["is_superuser"] = False
@@ -524,6 +538,10 @@ class MembershipsViewSet(viewsets.ViewSet):
         membership.end_date = timezone.now()
         membership.save(update_fields=["is_active", "end_date"])
 
+        user = membership.user
+        user.role = CustomUser.MIEMBRO_ITINERANTE
+        user.save(update_fields=["role"])
+
         return Response({"detail": "Membresía cancelada de forma inmediata."}, status=status.HTTP_200_OK)
 
     # Crear una suscripción válida
@@ -531,6 +549,10 @@ class MembershipsViewSet(viewsets.ViewSet):
         serializer = SubscribeSerializer(data=data, context={"user": user})
         if serializer.is_valid():
             membership = serializer.save()
+
+            user.role = CustomUser.MIEMBRO
+            user.save(update_fields=["role"])
+
             return Response(MembershipSerializer(membership).data, status=status.HTTP_201_CREATED)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
