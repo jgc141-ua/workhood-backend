@@ -38,6 +38,7 @@ class ReservationSerializer(serializers.ModelSerializer):
             'state',
             'reservation_type',
             'recurrence_end_date',
+            'total_price',
             'created_at',
             'updated_at',
             'user',
@@ -54,6 +55,7 @@ class ReservationSerializer(serializers.ModelSerializer):
             'user',
             'user_email',
             'membership',
+            'total_price',
         ]
 
 
@@ -118,9 +120,10 @@ class ReservationCreateSerializer(serializers.ModelSerializer):
             self._validate_space_schedule(occ_start, occ_end)
             self._validate_no_overlap(resource, occ_start, occ_end)
 
-        # Crea todas las reservas
+        # Crea todas las reservas con su precio calculado
         created_reservations = []
         for occ_start, occ_end in occurrences:
+            total_price = self._calculate_total_price(resource, occ_start, occ_end)
             reservation = Reservation.objects.create(
                 user=user,
                 resource=resource,
@@ -128,12 +131,17 @@ class ReservationCreateSerializer(serializers.ModelSerializer):
                 end_time=occ_end,
                 reservation_type=reservation_type,
                 recurrence_end_date=recurrence_end_date,
+                total_price=total_price,
                 state=Reservation.CONFIRMED,
             )
             created_reservations.append(reservation)
 
         # Devuelve la primera reserva creada
         return created_reservations[0]
+
+    def _calculate_total_price(self, resource, start_time, end_time):
+        hours = (end_time - start_time).total_seconds() / 3600
+        return round(float(resource.price) * hours, 2)
 
     def _generate_occurrences(self, start_time, end_time, reservation_type, recurrence_end_date):
         duration = end_time - start_time
