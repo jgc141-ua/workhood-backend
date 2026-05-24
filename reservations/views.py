@@ -1,4 +1,7 @@
-from django.utils.dateparse import parse_datetime
+from datetime import datetime
+
+from django.db import models
+from django.utils.dateparse import parse_date, parse_datetime
 from django.utils import timezone
 from rest_framework import status, viewsets
 from rest_framework.decorators import action
@@ -149,3 +152,79 @@ class ReservationsViewSet(viewsets.ViewSet):
             return Response({"available": False, "reason": "El recurso ya está reservado en esa franja."})
 
         return Response({"available": True})
+
+    @action(detail=False, methods=['get'], url_path='resource-schedule')
+    def resource_schedule(self, request):
+        resource_id = request.query_params.get('resource')
+        date_str = request.query_params.get('date')
+
+        if not resource_id or not date_str:
+            return Response(
+                {"detail": "Los parámetros 'resource' y 'date' son obligatorios."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        try:
+            resource = Resource.objects.get(pk=resource_id)
+        except Resource.DoesNotExist:
+            return Response({"detail": "Recurso no encontrado."}, status=status.HTTP_404_NOT_FOUND)
+
+        target_date = parse_date(date_str)
+        if not target_date:
+            return Response({"detail": "Formato de fecha inválido."}, status=status.HTTP_400_BAD_REQUEST)
+
+        schedule = SpaceSchedule.objects.filter(
+            start_date__lte=target_date,
+        ).filter(
+            models.Q(end_date__gte=target_date) | models.Q(end_date__isnull=True)
+        ).first()
+
+        if not schedule or not schedule.is_open:
+            return Response({
+                "resource": resource.id,
+                "date": date_str,
+                "is_open": False,
+                "blocks": [],
+            })
+
+        opening = datetime.combine(target_date, schedule.opening_time)
+        closing = datetime.combine(target_date, schedule.closing_time)
+
+        reservations = Reservation.objects.filter(
+            resource=resource,
+            state__in=(Reservation.PENDING, Reservation.CONFIRMED),
+            start_time__date=target_date,
+        ).order_by('start_time')
+
+        blocks = []
+        current = opening
+
+        for reservation in reservations:
+            if reservation.start_time > current:
+                blocks.append({
+                    "start_time": current.strftime("%H:%M"),
+                    "end_time": reservation.start_time.strftime("%H:%M"),
+                    "status": "free",
+                })
+            blocks.append({
+                "start_time": reservation.start_time.strftime("%H:%M"),
+                "end_time": reservation.end_time.strftime("%H:%M"),
+                "status": "occupied",
+            })
+            current = max(current, reservation.end_time)
+
+        if current < closing:
+            blocks.append({
+                "start_time": current.strftime("%H:%M"),
+                "end_time": closing.strftime("%H:%M"),
+                "status": "free",
+            })
+
+        return Response({
+            "resource": resource.id,
+            "date": date_str,
+            "is_open": True,
+            "opening_time": schedule.opening_time.strftime("%H:%M"),
+            "closing_time": schedule.closing_time.strftime("%H:%M"),
+            "blocks": blocks,
+        })

@@ -65,6 +65,7 @@ urlpatterns = [
     path("reservations/my/", ReservationsViewSet.as_view({"get": "my_reservations"}), name="my_reservations"),
     path("reservations/create/", ReservationsViewSet.as_view({"post": "create_reservation"}), name="create_reservation"),
     path("reservations/availability/", ReservationsViewSet.as_view({"get": "availability"}), name="availability"),
+    path("reservations/resource-schedule/", ReservationsViewSet.as_view({"get": "resource_schedule"}), name="resource_schedule"),
 
     # Horarios del espacio (gestión admin)
     path("space-schedule/all/", SpaceScheduleViewSet.as_view({"get": "all"}), name="all_space_schedules"),

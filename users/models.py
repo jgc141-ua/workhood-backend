@@ -117,6 +117,7 @@ class Resource(models.Model):
     name = models.CharField(max_length=25)
     description = models.TextField(blank=True, null=True)
     capacity = models.IntegerField()
+    price = models.DecimalField(max_digits=8, decimal_places=2, default=0)
     availability = models.BooleanField(default=True)
     is_active = models.BooleanField(default=True)
 
