@@ -1,7 +1,8 @@
-from datetime import timedelta
+from datetime import timedelta, timezone as dt_timezone
 
 from dateutil.relativedelta import relativedelta
 from django.db import models, transaction
+from django.utils import timezone
 from rest_framework import serializers
 
 from .models import Reservation, SpaceSchedule
@@ -82,6 +83,9 @@ class ReservationCreateSerializer(serializers.ModelSerializer):
         reservation_type = data.get('reservation_type')
         recurrence_end_date = data.get('recurrence_end_date')
 
+        if start_time < timezone.now():
+            raise serializers.ValidationError("No se puede reservar en el pasado.")
+
         if start_time >= end_time:
             raise serializers.ValidationError("La fecha de inicio debe ser anterior a la fecha de fin.")
 
@@ -96,8 +100,28 @@ class ReservationCreateSerializer(serializers.ModelSerializer):
                 )
 
         if reservation_type == Reservation.DAILY:
-            data['start_time'] = start_time.replace(hour=0, minute=0, second=0, microsecond=0)
-            data['end_time'] = start_time.replace(hour=23, minute=59, second=59, microsecond=0)
+            schedule = SpaceSchedule.objects.filter(
+                models.Q(start_date__lte=start_time.date()),
+                models.Q(end_date__gte=start_time.date()) | models.Q(end_date__isnull=True),
+            ).first()
+
+            if not schedule or not schedule.is_open:
+                raise serializers.ValidationError(
+                    f"El espacio está cerrado el {start_time.date()}."
+                )
+
+            data['start_time'] = start_time.replace(
+                hour=schedule.opening_time.hour,
+                minute=schedule.opening_time.minute,
+                second=0,
+                microsecond=0,
+            )
+            data['end_time'] = end_time.replace(
+                hour=schedule.closing_time.hour,
+                minute=schedule.closing_time.minute,
+                second=0,
+                microsecond=0,
+            )
 
         return data
 
@@ -178,7 +202,10 @@ class ReservationCreateSerializer(serializers.ModelSerializer):
         if not schedule or not schedule.is_open:
             raise serializers.ValidationError(f"El espacio está cerrado el {start_time.date()}.")
 
-        if start_time.time() < schedule.opening_time or end_time.time() > schedule.closing_time:
+        start_naive = timezone.make_naive(start_time, dt_timezone.utc)
+        end_naive = timezone.make_naive(end_time, dt_timezone.utc)
+
+        if start_naive.time() < schedule.opening_time or end_naive.time() > schedule.closing_time:
             raise serializers.ValidationError(
                 f"La reserva debe estar dentro del horario ({schedule.opening_time} - {schedule.closing_time})."
             )

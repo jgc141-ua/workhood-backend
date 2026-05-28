@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, timezone as dt_timezone
 
 from django.db import models
 from django.utils.dateparse import parse_date, parse_datetime
@@ -30,8 +30,10 @@ class SpaceScheduleViewSet(viewsets.ViewSet):
     @action(detail=False, methods=['get'], url_path='all')
     def all(self, request):
         queryset = self.get_queryset().order_by('-start_date')
-        serializer = SpaceScheduleSerializer(queryset, many=True)
-        return Response(serializer.data)
+        paginator = Pagination()
+        page = paginator.paginate_queryset(queryset, request)
+        serializer = SpaceScheduleSerializer(page, many=True)
+        return paginator.get_paginated_response(serializer.data)
 
     @action(detail=False, methods=['post'], url_path='create')
     def create(self, request):
@@ -95,10 +97,8 @@ class ReservationsViewSet(viewsets.ViewSet):
         elif upcoming == 'false':
             queryset = queryset.filter(start_time__lt=timezone.now())
 
-        paginator = Pagination()
-        page = paginator.paginate_queryset(queryset, request)
-        serializer = ReservationSerializer(page, many=True)
-        return paginator.get_paginated_response(serializer.data)
+        serializer = ReservationSerializer(queryset, many=True)
+        return Response(serializer.data)
 
     @action(detail=False, methods=['post'], url_path='create')
     def create_reservation(self, request):
@@ -200,18 +200,21 @@ class ReservationsViewSet(viewsets.ViewSet):
         current = opening
 
         for reservation in reservations:
-            if reservation.start_time > current:
+            res_start = timezone.make_naive(reservation.start_time, dt_timezone.utc)
+            res_end = timezone.make_naive(reservation.end_time, dt_timezone.utc)
+
+            if res_start > current:
                 blocks.append({
                     "start_time": current.strftime("%H:%M"),
-                    "end_time": reservation.start_time.strftime("%H:%M"),
+                    "end_time": res_start.strftime("%H:%M"),
                     "status": "free",
                 })
             blocks.append({
-                "start_time": reservation.start_time.strftime("%H:%M"),
-                "end_time": reservation.end_time.strftime("%H:%M"),
+                "start_time": res_start.strftime("%H:%M"),
+                "end_time": res_end.strftime("%H:%M"),
                 "status": "occupied",
             })
-            current = max(current, reservation.end_time)
+            current = max(current, res_end)
 
         if current < closing:
             blocks.append({
