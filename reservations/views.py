@@ -177,7 +177,13 @@ class ReservationsViewSet(viewsets.ViewSet):
             start_date__lte=target_date,
         ).filter(
             models.Q(end_date__gte=target_date) | models.Q(end_date__isnull=True)
-        ).first()
+        ).annotate(
+            is_specific=models.Case(
+                models.When(end_date__isnull=False, then=0),
+                default=1,
+                output_field=models.IntegerField(),
+            )
+        ).order_by('is_specific', '-start_date').first()
 
         if not schedule or not schedule.is_open:
             return Response({

@@ -24,6 +24,23 @@ class SpaceScheduleSerializer(serializers.ModelSerializer):
         ]
         read_only_fields = ['id', 'created_at', 'updated_at']
 
+    def validate(self, data):
+        is_open = data.get('is_open')
+        opening_time = data.get('opening_time')
+        closing_time = data.get('closing_time')
+
+        if is_open:
+            if not opening_time:
+                raise serializers.ValidationError(
+                    {"opening_time": "La hora de apertura es obligatoria cuando el espacio está abierto."}
+                )
+            if not closing_time:
+                raise serializers.ValidationError(
+                    {"closing_time": "La hora de cierre es obligatoria cuando el espacio está abierto."}
+                )
+
+        return data
+
 
 # region Reservation
 class ReservationSerializer(serializers.ModelSerializer):
@@ -103,7 +120,13 @@ class ReservationCreateSerializer(serializers.ModelSerializer):
             schedule = SpaceSchedule.objects.filter(
                 models.Q(start_date__lte=start_time.date()),
                 models.Q(end_date__gte=start_time.date()) | models.Q(end_date__isnull=True),
-            ).first()
+            ).annotate(
+                is_specific=models.Case(
+                    models.When(end_date__isnull=False, then=0),
+                    default=1,
+                    output_field=models.IntegerField(),
+                )
+            ).order_by('is_specific', '-start_date').first()
 
             if not schedule or not schedule.is_open:
                 raise serializers.ValidationError(
@@ -197,7 +220,13 @@ class ReservationCreateSerializer(serializers.ModelSerializer):
             start_date__lte=start_time.date(),
         ).filter(
             models.Q(end_date__gte=start_time.date()) | models.Q(end_date__isnull=True)
-        ).first()
+        ).annotate(
+            is_specific=models.Case(
+                models.When(end_date__isnull=False, then=0),
+                default=1,
+                output_field=models.IntegerField(),
+            )
+        ).order_by('is_specific', '-start_date').first()
 
         if not schedule or not schedule.is_open:
             raise serializers.ValidationError(f"El espacio está cerrado el {start_time.date()}.")
