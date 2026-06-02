@@ -1,6 +1,6 @@
 from datetime import datetime, timezone as dt_timezone
 
-from django.db import models
+from django.db import models, transaction
 from django.utils.dateparse import parse_date, parse_datetime
 from django.utils import timezone
 from rest_framework import status, viewsets
@@ -79,11 +79,7 @@ class SpaceScheduleViewSet(viewsets.ViewSet):
 class ReservationsViewSet(viewsets.ViewSet):
     permission_classes = [IsAuthenticated]
 
-    @action(detail=False, methods=['get'], url_path='my')
-    def my_reservations(self, request):
-        queryset = Reservation.objects.filter(user=request.user).order_by('-start_time')
-
-        # Filtros opcionales
+    def _apply_reservation_filters(self, queryset, request):
         state = request.query_params.get('state')
         resource_type = request.query_params.get('resource_type')
         upcoming = request.query_params.get('upcoming')
@@ -96,6 +92,13 @@ class ReservationsViewSet(viewsets.ViewSet):
             queryset = queryset.filter(start_time__gte=timezone.now())
         elif upcoming == 'false':
             queryset = queryset.filter(start_time__lt=timezone.now())
+
+        return queryset
+
+    @action(detail=False, methods=['get'], url_path='my')
+    def my_reservations(self, request):
+        queryset = Reservation.objects.filter(user=request.user).order_by('start_time')
+        queryset = self._apply_reservation_filters(queryset, request)
 
         serializer = ReservationSerializer(queryset, many=True)
         return Response(serializer.data)
@@ -237,3 +240,55 @@ class ReservationsViewSet(viewsets.ViewSet):
             "closing_time": schedule.closing_time.strftime("%H:%M"),
             "blocks": blocks,
         })
+
+    @action(detail=False, methods=['get'], url_path='all', permission_classes=[IsOperatorAdmin])
+    def all_reservations(self, request):
+        queryset = Reservation.objects.all().order_by('start_time')
+        queryset = self._apply_reservation_filters(queryset, request)
+
+        paginator = Pagination()
+        page = paginator.paginate_queryset(queryset, request)
+        serializer = ReservationSerializer(page, many=True)
+        return paginator.get_paginated_response(serializer.data)
+
+    @action(detail=False, methods=['post'], url_path='cancel')
+    def cancel_reservation(self, request):
+        reservation_id = request.data.get('id')
+        if not reservation_id:
+            return Response(
+                {"detail": "El campo 'id' es obligatorio."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        try:
+            reservation = Reservation.objects.get(pk=reservation_id)
+        except Reservation.DoesNotExist:
+            return Response(
+                {"detail": "Reserva no encontrada."},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        is_admin = IsOperatorAdmin().has_permission(request, self)
+        if not is_admin and reservation.user != request.user:
+            return Response(
+                {"detail": "No puedes cancelar una reserva que no es tuya."},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
+        if reservation.state == Reservation.CANCELLED:
+            return Response(
+                {"detail": "La reserva ya está cancelada."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        if reservation.start_time < timezone.now():
+            return Response(
+                {"detail": "No se puede cancelar una reserva pasada."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        reservation.state = Reservation.CANCELLED
+        reservation.save()
+
+        serializer = ReservationSerializer(reservation)
+        return Response(serializer.data)

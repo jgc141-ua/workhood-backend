@@ -63,7 +63,9 @@ urlpatterns = [
     # region Reservations
     # Reservas de recursos por parte de los miembros
     path("reservations/my/", ReservationsViewSet.as_view({"get": "my_reservations"}), name="my_reservations"),
+    path("reservations/all/", ReservationsViewSet.as_view({"get": "all_reservations"}), name="all_reservations"),
     path("reservations/create/", ReservationsViewSet.as_view({"post": "create_reservation"}), name="create_reservation"),
+    path("reservations/cancel/", ReservationsViewSet.as_view({"post": "cancel_reservation"}), name="cancel_reservation"),
     path("reservations/availability/", ReservationsViewSet.as_view({"get": "availability"}), name="availability"),
     path("reservations/resource-schedule/", ReservationsViewSet.as_view({"get": "resource_schedule"}), name="resource_schedule"),
 
