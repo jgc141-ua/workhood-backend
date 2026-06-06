@@ -45,6 +45,7 @@ INSTALLED_APPS = [
     'corsheaders',
     'users',
     'reservations',
+    'accesses',
 ]
 
 AUTH_USER_MODEL = 'users.CustomUser'

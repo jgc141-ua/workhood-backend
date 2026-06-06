@@ -1,13 +1,11 @@
-from django.contrib import admin
-from django.urls import path
+from django.urls import include, path
 from rest_framework_simplejwt.views import TokenObtainPairView
 from users.views import BenefitsViewSet, MembershipsViewSet, MembershipTypesViewSet, MembersViewSet, ResourcesViewSet, ResourceTypesViewSet, UserViewSet, CustomTokenRefreshView
 from reservations.views import ReservationsViewSet, SpaceScheduleViewSet
+from accesses.views import AccessViewSet
 
 # Rutas principales de la API de WorkHood
 urlpatterns = [
-    # path("admin/", admin.site.urls),
-
     # region Accounts
     # Autenticación y gestión del perfil del usuario
     path("accounts/login/", TokenObtainPairView.as_view(), name="token_obtain_pair"),
@@ -74,4 +72,11 @@ urlpatterns = [
     path("space-schedule/create/", SpaceScheduleViewSet.as_view({"post": "create"}), name="create_space_schedule"),
     path("space-schedule/update/", SpaceScheduleViewSet.as_view({"put": "update", "patch": "update"}), name="update_space_schedule"),
     path("space-schedule/delete/", SpaceScheduleViewSet.as_view({"delete": "delete"}), name="delete_space_schedule"),
+
+    # region Accesses
+    # Control de accesos del espacio
+    path("accesses/check-in/", AccessViewSet.as_view({"post": "check_in"}), name="access_check_in"),
+    path("accesses/check-out/", AccessViewSet.as_view({"post": "check_out"}), name="access_check_out"),
+    path("accesses/logs/", AccessViewSet.as_view({"get": "logs"}), name="access_logs"),
+    path("accesses/my-logs/", AccessViewSet.as_view({"get": "my_logs"}), name="access_my_logs"),
 ]
