@@ -83,12 +83,15 @@ class ReservationsViewSet(viewsets.ViewSet):
         state = request.query_params.get('state')
         resource_type = request.query_params.get('resource_type')
         upcoming = request.query_params.get('upcoming')
+        today = request.query_params.get('today')
 
         if state:
             queryset = queryset.filter(state=state)
         if resource_type:
             queryset = queryset.filter(resource__resource_type=resource_type)
-        if upcoming == 'true':
+        if today == 'true':
+            queryset = queryset.filter(start_time__date=timezone.now().date())
+        elif upcoming == 'true':
             queryset = queryset.filter(start_time__gte=timezone.now())
         elif upcoming == 'false':
             queryset = queryset.filter(start_time__lt=timezone.now())
@@ -97,11 +100,16 @@ class ReservationsViewSet(viewsets.ViewSet):
 
     @action(detail=False, methods=['get'], url_path='my')
     def my_reservations(self, request):
-        queryset = Reservation.objects.filter(user=request.user).order_by('start_time')
+        today = request.query_params.get('today')
+        ordering = 'start_time' if today == 'true' else '-start_time'
+
+        queryset = Reservation.objects.filter(user=request.user).order_by(ordering)
         queryset = self._apply_reservation_filters(queryset, request)
 
-        serializer = ReservationSerializer(queryset, many=True)
-        return Response(serializer.data)
+        paginator = Pagination()
+        page = paginator.paginate_queryset(queryset, request)
+        serializer = ReservationSerializer(page, many=True)
+        return paginator.get_paginated_response(serializer.data)
 
     @action(detail=False, methods=['post'], url_path='create')
     def create_reservation(self, request):

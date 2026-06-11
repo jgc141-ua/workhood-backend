@@ -1,3 +1,4 @@
+from django.db import models
 from django.utils import timezone
 from rest_framework import status, viewsets
 from rest_framework.decorators import action
@@ -130,7 +131,10 @@ class AccessViewSet(viewsets.ViewSet):
         if access_result:
             queryset = queryset.filter(result=access_result.upper())
         if user_email:
-            queryset = queryset.filter(user__email=user_email)
+            queryset = queryset.filter(
+                models.Q(user__email__icontains=user_email) |
+                models.Q(user_email__icontains=user_email)
+            )
 
         paginator = Pagination()
         page = paginator.paginate_queryset(queryset, request)
