@@ -19,7 +19,6 @@ class CustomUser(AbstractUser):
 
     nif_cif = models.CharField(max_length=20, blank=True, null=True)
     phone = models.CharField(max_length=20, blank=True, null=True)
-    updated_at = models.DateTimeField(auto_now=True)
 
     ADMIN = 'ADMIN'
     MIEMBRO = 'MIEMBRO'
@@ -32,6 +31,10 @@ class CustomUser(AbstractUser):
         (VISITANTE, 'Visitante'),
     ]
     role = models.CharField(max_length=50, choices=ROLE_CHOICES, default=MIEMBRO_ITINERANTE)
+
+    # Fechas de control
+    updated_at = models.DateTimeField(auto_now=True)
+    deleted_at = models.DateTimeField(null=True, blank=True)
 
     # Relaciones
     address = models.ForeignKey(Address, on_delete=models.PROTECT, related_name='address')
@@ -91,12 +94,22 @@ class Membership_Type(models.Model):
     is_fixed = models.BooleanField(default=False)
     is_active = models.BooleanField(default=True)
 
+    # Fechas de control
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    deleted_at = models.DateTimeField(null=True, blank=True)
+
 
 # region ResourceType
 class Resource_Type(models.Model):
     id = models.AutoField(primary_key=True)
     name = models.CharField(max_length=25, unique=True)
     description = models.TextField(blank=True, null=True)
+
+    # Fechas de control
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    deleted_at = models.DateTimeField(null=True, blank=True)
 
 
 # region Benefit
@@ -105,6 +118,11 @@ class Benefit(models.Model):
     name = models.CharField(max_length=25, unique=True)
     description = models.TextField(max_length=50, blank=True)
     quantity = models.PositiveIntegerField(blank=True, null=True, help_text="Cantidad incluida. Null = ilimitado.")
+    
+    # Fechas de control
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    deleted_at = models.DateTimeField(null=True, blank=True)
 
     # Relaciones
     resource_type = models.ForeignKey(Resource_Type, on_delete=models.PROTECT, related_name='benefits', null=True, blank=True)
@@ -120,6 +138,11 @@ class Resource(models.Model):
     price = models.DecimalField(max_digits=8, decimal_places=2, default=0)
     availability = models.BooleanField(default=True)
     is_active = models.BooleanField(default=True)
+
+    # Fechas de control
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    deleted_at = models.DateTimeField(null=True, blank=True)
 
     # Relaciones
     resource_type = models.ForeignKey(Resource_Type, on_delete=models.PROTECT, related_name='resource_type')
