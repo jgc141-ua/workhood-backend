@@ -1,5 +1,8 @@
 from django.contrib.auth.models import AbstractUser
 from django.db import models
+from django.db.models import Q
+
+from .managers import SoftDeleteModel, SoftDeleteManager, SoftDeleteUserManager
 
 
 # region Address
@@ -13,7 +16,7 @@ class Address(models.Model):
 
 
 # region User
-class CustomUser(AbstractUser):
+class CustomUser(AbstractUser, SoftDeleteModel):
     username = None
     email = models.EmailField(unique=True)
 
@@ -34,7 +37,6 @@ class CustomUser(AbstractUser):
 
     # Fechas de control
     updated_at = models.DateTimeField(auto_now=True)
-    deleted_at = models.DateTimeField(null=True, blank=True)
 
     # Relaciones
     address = models.ForeignKey(Address, on_delete=models.PROTECT, related_name='address')
@@ -43,6 +45,9 @@ class CustomUser(AbstractUser):
     # Convertir el campo de usuario en el email
     USERNAME_FIELD = 'email'
     REQUIRED_FIELDS = []
+
+    objects = SoftDeleteUserManager()
+    all_objects = models.Manager()
 
 
 # region Legal
@@ -86,9 +91,9 @@ class Payment(models.Model):
 
 
 # region MembershipType
-class Membership_Type(models.Model):
+class Membership_Type(SoftDeleteModel):
     id = models.AutoField(primary_key=True)
-    name = models.CharField(max_length=25, unique=True)
+    name = models.CharField(max_length=25)
     description = models.TextField(max_length=50, blank=True)
     monthly_price = models.DecimalField(max_digits=8, decimal_places=2)
     is_fixed = models.BooleanField(default=False)
@@ -97,40 +102,76 @@ class Membership_Type(models.Model):
     # Fechas de control
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
-    deleted_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=['name'],
+                condition=Q(deleted_at__isnull=True),
+                name='unique_active_membership_type_name',
+            ),
+        ]
+        base_manager_name = 'all_objects'
+
+    objects = SoftDeleteManager()
+    all_objects = models.Manager()
 
 
 # region ResourceType
-class Resource_Type(models.Model):
+class Resource_Type(SoftDeleteModel):
     id = models.AutoField(primary_key=True)
-    name = models.CharField(max_length=25, unique=True)
+    name = models.CharField(max_length=25)
     description = models.TextField(blank=True, null=True)
 
     # Fechas de control
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
-    deleted_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=['name'],
+                condition=Q(deleted_at__isnull=True),
+                name='unique_active_resource_type_name',
+            ),
+        ]
+        base_manager_name = 'all_objects'
+
+    objects = SoftDeleteManager()
+    all_objects = models.Manager()
 
 
 # region Benefit
-class Benefit(models.Model):
+class Benefit(SoftDeleteModel):
     id = models.AutoField(primary_key=True)
-    name = models.CharField(max_length=25, unique=True)
+    name = models.CharField(max_length=25)
     description = models.TextField(max_length=50, blank=True)
     quantity = models.PositiveIntegerField(blank=True, null=True, help_text="Cantidad incluida. Null = ilimitado.")
-    
+
     # Fechas de control
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
-    deleted_at = models.DateTimeField(null=True, blank=True)
 
     # Relaciones
     resource_type = models.ForeignKey(Resource_Type, on_delete=models.PROTECT, related_name='benefits', null=True, blank=True)
     membership_type = models.ManyToManyField(Membership_Type, related_name='membership_type_benefits')
 
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=['name'],
+                condition=Q(deleted_at__isnull=True),
+                name='unique_active_benefit_name',
+            ),
+        ]
+        base_manager_name = 'all_objects'
+
+    objects = SoftDeleteManager()
+    all_objects = models.Manager()
+
 
 # region Resource
-class Resource(models.Model):
+class Resource(SoftDeleteModel):
     id = models.AutoField(primary_key=True)
     name = models.CharField(max_length=25)
     description = models.TextField(blank=True, null=True)
@@ -142,10 +183,15 @@ class Resource(models.Model):
     # Fechas de control
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
-    deleted_at = models.DateTimeField(null=True, blank=True)
 
     # Relaciones
     resource_type = models.ForeignKey(Resource_Type, on_delete=models.PROTECT, related_name='resource_type')
+
+    class Meta:
+        base_manager_name = 'all_objects'
+
+    objects = SoftDeleteManager()
+    all_objects = models.Manager()
 
 
 # region Membership
@@ -162,5 +208,3 @@ class Membership(models.Model):
     user = models.ForeignKey(CustomUser, on_delete=models.PROTECT, related_name='user_membership')
     membership_type = models.ForeignKey(Membership_Type, on_delete=models.PROTECT, related_name='membership_type')
     resource = models.ForeignKey(Resource, on_delete=models.SET_NULL, related_name='membership_resources', null=True, blank=True)
-
-
