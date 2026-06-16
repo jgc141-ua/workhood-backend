@@ -57,3 +57,4 @@ class Reservation(models.Model):
     user = models.ForeignKey(CustomUser, on_delete=models.PROTECT, related_name='reservations')
     resource = models.ForeignKey(Resource, on_delete=models.PROTECT, related_name='reservations')
     membership = models.ForeignKey(Membership, on_delete=models.PROTECT, related_name='reservations', null=True, blank=True)
+    invoice = models.ForeignKey('invoices_payments.Invoice', on_delete=models.SET_NULL, related_name='reservations', null=True, blank=True)

@@ -3,6 +3,7 @@ from rest_framework_simplejwt.views import TokenObtainPairView
 from users.views import BenefitsViewSet, MembershipsViewSet, MembershipTypesViewSet, MembersViewSet, ResourcesViewSet, ResourceTypesViewSet, UserViewSet, CustomTokenRefreshView
 from reservations.views import ReservationsViewSet, SpaceScheduleViewSet
 from accesses.views import AccessViewSet
+from invoices_payments.views import PaymentMethodsViewSet
 
 # Rutas principales de la API de WorkHood
 urlpatterns = [
@@ -79,4 +80,11 @@ urlpatterns = [
     path("accesses/check-out/", AccessViewSet.as_view({"post": "check_out"}), name="access_check_out"),
     path("accesses/logs/", AccessViewSet.as_view({"get": "logs"}), name="access_logs"),
     path("accesses/my-logs/", AccessViewSet.as_view({"get": "my_logs"}), name="access_my_logs"),
+
+    # region PaymentMethods
+    # Gestión de métodos de pago
+    path("payment-methods/all/", PaymentMethodsViewSet.as_view({"get": "all"}), name="all_payment_methods"),
+    path("payment-methods/create/", PaymentMethodsViewSet.as_view({"post": "create"}), name="create_payment_method"),
+    path("payment-methods/update/", PaymentMethodsViewSet.as_view({"put": "update", "patch": "update"}), name="update_payment_method"),
+    path("payment-methods/delete/", PaymentMethodsViewSet.as_view({"delete": "delete"}), name="delete_payment_method"),
 ]

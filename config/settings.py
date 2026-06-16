@@ -12,6 +12,7 @@ https://docs.djangoproject.com/en/5.2/ref/settings/
 
 from pathlib import Path
 from datetime import timedelta
+from decimal import Decimal
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -46,6 +47,7 @@ INSTALLED_APPS = [
     'users',
     'reservations',
     'accesses',
+    'invoices_payments',
 ]
 
 AUTH_USER_MODEL = 'users.CustomUser'
@@ -165,3 +167,11 @@ STATIC_URL = 'static/'
 # https://docs.djangoproject.com/en/5.2/ref/settings/#default-auto-field
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
+
+# Facturación
+IVA_DEFAULT_RATE = Decimal('0.21')
+ISSUER_DATA = {
+    'name': 'Workhood Coworking S.L.',
+    'nif': 'B12345678',
+    'address': 'Carr. de San Vicente del Raspeig, s/n, 03690 San Vicente del Raspeig, Alicante',
+}

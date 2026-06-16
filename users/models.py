@@ -64,32 +64,6 @@ class Legal(models.Model):
     user = models.OneToOneField(CustomUser, on_delete=models.CASCADE, related_name='user_legal')
 
 
-# region Invoice
-class Invoice(models.Model):
-    id = models.AutoField(primary_key=True)
-    invoice_number = models.CharField(max_length=50, unique=True)
-    concept = models.CharField(max_length=255)
-    tax_base = models.DecimalField(max_digits=10, decimal_places=2)
-    iva = models.DecimalField(max_digits=10, decimal_places=2)
-    total = models.DecimalField(max_digits=10, decimal_places=2)
-    issue_date = models.DateTimeField(auto_now_add=True)
-    state = models.CharField(max_length=20, default='Pending')
-
-    # Relaciones
-    user = models.ForeignKey(CustomUser, on_delete=models.PROTECT, related_name='user_invoices')
-
-
-# region Payment
-class Payment(models.Model):
-    id = models.AutoField(primary_key=True)
-    price = models.DecimalField(max_digits=10, decimal_places=2)
-    method = models.CharField(max_length=50)
-    payment_date = models.DateTimeField(auto_now_add=True)
-
-    # Relaciones
-    invoice = models.ForeignKey(Invoice, on_delete=models.PROTECT, related_name='invoice_payments')
-
-
 # region MembershipType
 class Membership_Type(SoftDeleteModel):
     id = models.AutoField(primary_key=True)
