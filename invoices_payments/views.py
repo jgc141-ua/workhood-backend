@@ -12,7 +12,9 @@ from .serializers import (
     InvoiceDetailSerializer,
     InvoiceListSerializer,
     IssueInvoiceSerializer,
+    PayInvoiceSerializer,
     PaymentMethodSerializer,
+    RegisterPaymentSerializer,
 )
 
 
@@ -133,6 +135,31 @@ class InvoicesMemberViewSet(viewsets.ViewSet):
         serializer = InvoiceDetailSerializer(invoice)
         return Response(serializer.data)
 
+    @action(detail=False, methods=['post'], url_path='pay')
+    def pay(self, request):
+        pk = request.data.get('id')
+        if not pk:
+            return Response(
+                {'detail': "El campo 'id' es obligatorio."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        invoice = self._get_owned_invoice(request, pk)
+        if not invoice:
+            return Response(
+                {'detail': 'Factura no encontrada.'},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        serializer = PayInvoiceSerializer(
+            data=request.data,
+            context={'invoice': invoice, 'registered_by': request.user},
+        )
+        if serializer.is_valid():
+            payment = serializer.save()
+            return Response(serializer.data, status=status.HTTP_201_CREATED)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
 
 # region Invoices (Operador)
 class InvoicesAdminViewSet(viewsets.ViewSet):
@@ -150,9 +177,7 @@ class InvoicesAdminViewSet(viewsets.ViewSet):
         if state:
             queryset = queryset.filter(state=state)
         if email:
-            queryset = queryset.filter(
-                Q(user__email__icontains=email) | Q(user_email__icontains=email)
-            )
+            queryset = queryset.filter(user__email__icontains=email)
         if date_from:
             queryset = queryset.filter(issue_date__date__gte=date_from)
         if date_to:
@@ -188,5 +213,16 @@ class InvoicesAdminViewSet(viewsets.ViewSet):
         serializer = IssueInvoiceSerializer(data=request.data)
         if serializer.is_valid():
             invoice = serializer.save()
+            return Response(serializer.data, status=status.HTTP_201_CREATED)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+    @action(detail=False, methods=['post'], url_path='register-payment')
+    def register_payment(self, request):
+        serializer = RegisterPaymentSerializer(
+            data=request.data,
+            context={'registered_by': request.user},
+        )
+        if serializer.is_valid():
+            payment = serializer.save()
             return Response(serializer.data, status=status.HTTP_201_CREATED)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)

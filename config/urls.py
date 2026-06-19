@@ -92,8 +92,10 @@ urlpatterns = [
     # Facturas del miembro
     path("invoices/my/", InvoicesMemberViewSet.as_view({"get": "my"}), name="my_invoices"),
     path("invoices/my-detail/", InvoicesMemberViewSet.as_view({"get": "my_detail"}), name="my_invoice_detail"),
+    path("invoices/pay/", InvoicesMemberViewSet.as_view({"post": "pay"}), name="pay_invoice"),
     # Facturas del operador
     path("invoices/all/", InvoicesAdminViewSet.as_view({"get": "all"}), name="all_invoices"),
     path("invoices/invoice-detail/", InvoicesAdminViewSet.as_view({"get": "invoice_detail"}), name="admin_invoice_detail"),
     path("invoices/issue/", InvoicesAdminViewSet.as_view({"post": "issue"}), name="admin_invoice_issue"),
+    path("invoices/register-payment/", InvoicesAdminViewSet.as_view({"post": "register_payment"}), name="register_payment"),
 ]

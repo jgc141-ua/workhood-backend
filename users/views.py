@@ -8,6 +8,7 @@ from rest_framework.response import Response
 from rest_framework_simplejwt.views import TokenRefreshView
 
 from config.pagination import Pagination
+from invoices_payments.serializers import generate_membership_invoice
 from .models import Benefit, CustomUser, Membership, Membership_Type, Resource, Resource_Type
 from .permissions import IsOperatorAdmin
 from .serializers import (
@@ -550,6 +551,9 @@ class MembershipsViewSet(viewsets.ViewSet):
 
             user.role = CustomUser.MIEMBRO
             user.save(update_fields=["role"])
+
+            # Genera la factura de la primera cuota de membresía
+            generate_membership_invoice(membership)
 
             return Response(MembershipSerializer(membership).data, status=status.HTTP_201_CREATED)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)

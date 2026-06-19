@@ -2,13 +2,36 @@ from decimal import Decimal
 from datetime import timedelta
 
 from django.conf import settings
-from django.db import transaction
+from django.db import models, transaction
 from django.utils import timezone
 from rest_framework import serializers
 
 from users.models import CustomUser
 
 from .models import Invoice, InvoiceItem, Payment, PaymentMethod
+
+
+# Registra un pago sobre una factura y marca PAGADA si cubre el total
+@transaction.atomic
+def register_payment(invoice, amount, method, registered_by=None, reference=None):
+    amount = Decimal(str(amount))
+    payment = Payment.objects.create(
+        invoice=invoice,
+        amount=amount,
+        method=method,
+        registered_by=registered_by,
+        reference=reference,
+    )
+
+    total_paid = invoice.payments.aggregate(
+        total=models.Sum('amount')
+    )['total'] or Decimal('0')
+
+    if invoice.state in (Invoice.EMITIDA, Invoice.VENCIDA) and total_paid >= invoice.total:
+        invoice.state = Invoice.PAGADA
+        invoice.save(update_fields=['state', 'updated_at'])
+
+    return payment
 
 
 # region PaymentMethod
@@ -22,6 +45,7 @@ class PaymentMethodSerializer(serializers.ModelSerializer):
             'name',
             'new_name',
             'is_active',
+            'member_visible',
             'created_at',
             'updated_at',
         )
@@ -29,6 +53,7 @@ class PaymentMethodSerializer(serializers.ModelSerializer):
             'id': {'read_only': True},
             'name': {'required': True},
             'is_active': {'required': False},
+            'member_visible': {'required': False},
             'created_at': {'read_only': True},
             'updated_at': {'read_only': True},
         }
@@ -171,79 +196,208 @@ class IssueInvoiceSerializer(serializers.Serializer):
             raise serializers.ValidationError('Usuario no encontrado.')
         return value
 
-    def _generate_invoice_number(self):
-        year = timezone.now().year
-        prefix = f'INV-{year}-'
-        last = (
-            Invoice.objects
-            .filter(invoice_number__startswith=prefix)
-            .order_by('-invoice_number')
-            .first()
-        )
-        if last:
-            try:
-                seq = int(last.invoice_number.split('-')[-1]) + 1
-            except ValueError:
-                seq = 1
-        else:
-            seq = 1
-        return f'{prefix}{seq:06d}'
-
-    @transaction.atomic
     def create(self, validated_data):
-        email = validated_data['email']
-        concept = validated_data['concept']
-        amount = Decimal(str(validated_data['amount']))
-        iva_rate = Decimal(str(validated_data.get('iva_rate', settings.IVA_DEFAULT_RATE)))
-
-        iva_amount = (amount * iva_rate).quantize(Decimal('0.01'))
-        total = (amount + iva_amount).quantize(Decimal('0.01'))
-
-        user = CustomUser.objects.get(email=email)
-
-        user_address = ''
-        if user.address:
-            parts = [
-                user.address.street,
-                user.address.city,
-                user.address.state,
-                user.address.postal_code,
-                user.address.country,
-            ]
-            user_address = ', '.join(p for p in parts if p)
-
-        issuer = settings.ISSUER_DATA
-        now = timezone.now()
-
-        invoice = Invoice.objects.create(
-            invoice_number=self._generate_invoice_number(),
-            concept=concept,
-            issuer_name=issuer['name'],
-            issuer_nif=issuer['nif'],
-            issuer_address=issuer['address'],
+        user = CustomUser.objects.get(email=validated_data['email'])
+        return _create_invoice(
             user=user,
-            user_name=f'{user.first_name} {user.last_name}'.strip(),
-            user_nif=user.nif_cif or '',
-            user_address=user_address,
-            tax_base=amount,
-            iva_rate=iva_rate,
-            iva_amount=iva_amount,
-            total=total,
-            due_date=now + timedelta(days=7),
-            period_start=now.date(),
-            period_end=(now + timedelta(days=30)).date(),
-            state=Invoice.EMITIDA,
+            concept=validated_data['concept'],
+            amount=validated_data['amount'],
+            iva_rate=validated_data.get('iva_rate'),
         )
-
-        InvoiceItem.objects.create(
-            invoice=invoice,
-            description=concept,
-            quantity=Decimal('1'),
-            unit_price=amount,
-            subtotal=amount,
-        )
-
-        return invoice
 
     def to_representation(self, instance):
         return InvoiceDetailSerializer(instance, context=self.context).data
+
+
+# Genera un número de factura secuencial anual: INV-YYYY-NNNNNN
+def _generate_invoice_number():
+    year = timezone.now().year
+    prefix = f'INV-{year}-'
+    last = (
+        Invoice.objects
+        .filter(invoice_number__startswith=prefix)
+        .order_by('-invoice_number')
+        .first()
+    )
+    if last:
+        try:
+            seq = int(last.invoice_number.split('-')[-1]) + 1
+        except ValueError:
+            seq = 1
+    else:
+        seq = 1
+    return f'{prefix}{seq:06d}'
+
+
+# Crea una factura EMITIDA con su línea de detalle
+@transaction.atomic
+def _create_invoice(
+    user,
+    concept,
+    amount,
+    iva_rate=None,
+    membership=None,
+    period_start=None,
+    period_end=None,
+    due_date=None,
+):
+    if iva_rate is None:
+        iva_rate = settings.IVA_DEFAULT_RATE
+
+    amount = Decimal(str(amount))
+    iva_rate = Decimal(str(iva_rate))
+    iva_amount = (amount * iva_rate).quantize(Decimal('0.01'))
+    total = (amount + iva_amount).quantize(Decimal('0.01'))
+
+    if period_start is None:
+        period_start = timezone.now().date()
+    if hasattr(period_start, 'date'):
+        period_start = period_start.date()
+    if period_end is None:
+        period_end = (timezone.now() + timedelta(days=30)).date()
+    if hasattr(period_end, 'date'):
+        period_end = period_end.date()
+    if due_date is None:
+        due_date = timezone.now() + timedelta(days=7)
+
+    user_address = ''
+    if user.address:
+        parts = [
+            user.address.street,
+            user.address.city,
+            user.address.state,
+            user.address.postal_code,
+            user.address.country,
+        ]
+        user_address = ', '.join(p for p in parts if p)
+
+    issuer = settings.ISSUER_DATA
+
+    invoice = Invoice.objects.create(
+        invoice_number=_generate_invoice_number(),
+        concept=concept,
+        issuer_name=issuer['name'],
+        issuer_nif=issuer['nif'],
+        issuer_address=issuer['address'],
+        user=user,
+        user_name=f'{user.first_name} {user.last_name}'.strip(),
+        user_nif=user.nif_cif or '',
+        user_address=user_address,
+        membership=membership,
+        tax_base=amount,
+        iva_rate=iva_rate,
+        iva_amount=iva_amount,
+        total=total,
+        due_date=due_date,
+        period_start=period_start,
+        period_end=period_end,
+        state=Invoice.EMITIDA,
+    )
+
+    InvoiceItem.objects.create(
+        invoice=invoice,
+        description=concept,
+        quantity=Decimal('1'),
+        unit_price=amount,
+        subtotal=amount,
+    )
+
+    return invoice
+
+
+# Genera una factura EMITIDA a partir de una membresía recién creada
+def generate_membership_invoice(membership):
+    membership_type = membership.membership_type
+    return _create_invoice(
+        user=membership.user,
+        concept=f'Membresía {membership_type.name} ({membership.start_date.date()} a {membership.end_date.date()})',
+        amount=membership_type.monthly_price,
+        membership=membership,
+        period_start=membership.start_date,
+        period_end=membership.end_date,
+        due_date=timezone.now(),
+    )
+
+
+# region PayInvoice
+class PayInvoiceSerializer(serializers.Serializer):
+    method = serializers.PrimaryKeyRelatedField(queryset=PaymentMethod.objects.all())
+    reference = serializers.CharField(max_length=100, required=False, allow_blank=True)
+
+    def validate_method(self, value):
+        if not value.is_active:
+            raise serializers.ValidationError('El método de pago no está activo.')
+        return value
+
+    def validate(self, data):
+        invoice = self.context.get('invoice')
+        if not invoice:
+            raise serializers.ValidationError('Falta la factura en el contexto.')
+
+        if invoice.state not in (Invoice.EMITIDA, Invoice.VENCIDA):
+            raise serializers.ValidationError(
+                'La factura no admite pagos en su estado actual.'
+            )
+
+        return data
+
+    @transaction.atomic
+    def create(self, validated_data):
+        invoice = self.context['invoice']
+        registered_by = self.context.get('registered_by')
+
+        payment = register_payment(
+            invoice=invoice,
+            amount=invoice.total,
+            method=validated_data['method'],
+            registered_by=registered_by,
+            reference=validated_data.get('reference'),
+        )
+
+        return payment
+
+    def to_representation(self, instance):
+        return PaymentSerializer(instance).data
+
+
+# region RegisterPayment (admin)
+class RegisterPaymentSerializer(serializers.Serializer):
+    id = serializers.IntegerField(required=True)
+    method = serializers.PrimaryKeyRelatedField(queryset=PaymentMethod.objects.all())
+    reference = serializers.CharField(max_length=100, required=False, allow_blank=True)
+
+    def validate_method(self, value):
+        if not value.is_active:
+            raise serializers.ValidationError('El método de pago no está activo.')
+        return value
+
+    def validate(self, data):
+        try:
+            invoice = Invoice.objects.get(pk=data['id'])
+        except Invoice.DoesNotExist:
+            raise serializers.ValidationError({'id': 'Factura no encontrada.'})
+
+        if invoice.state not in (Invoice.EMITIDA, Invoice.VENCIDA):
+            raise serializers.ValidationError(
+                'La factura no admite pagos en su estado actual.'
+            )
+
+        self._invoice = invoice
+        return data
+
+    @transaction.atomic
+    def create(self, validated_data):
+        registered_by = self.context.get('registered_by')
+
+        payment = register_payment(
+            invoice=self._invoice,
+            amount=self._invoice.total,
+            method=validated_data['method'],
+            registered_by=registered_by,
+            reference=validated_data.get('reference'),
+        )
+
+        return payment
+
+    def to_representation(self, instance):
+        return PaymentSerializer(instance).data
