@@ -3,7 +3,7 @@ from rest_framework_simplejwt.views import TokenObtainPairView
 from users.views import BenefitsViewSet, MembershipsViewSet, MembershipTypesViewSet, MembersViewSet, ResourcesViewSet, ResourceTypesViewSet, UserViewSet, CustomTokenRefreshView
 from reservations.views import ReservationsViewSet, SpaceScheduleViewSet
 from accesses.views import AccessViewSet
-from invoices_payments.views import PaymentMethodsViewSet
+from invoices_payments.views import InvoicesAdminViewSet, InvoicesMemberViewSet, PaymentMethodsViewSet
 
 # Rutas principales de la API de WorkHood
 urlpatterns = [
@@ -87,4 +87,13 @@ urlpatterns = [
     path("payment-methods/create/", PaymentMethodsViewSet.as_view({"post": "create"}), name="create_payment_method"),
     path("payment-methods/update/", PaymentMethodsViewSet.as_view({"put": "update", "patch": "update"}), name="update_payment_method"),
     path("payment-methods/delete/", PaymentMethodsViewSet.as_view({"delete": "delete"}), name="delete_payment_method"),
+
+    # region Invoices
+    # Facturas del miembro
+    path("invoices/my/", InvoicesMemberViewSet.as_view({"get": "my"}), name="my_invoices"),
+    path("invoices/my-detail/", InvoicesMemberViewSet.as_view({"get": "my_detail"}), name="my_invoice_detail"),
+    # Facturas del operador
+    path("invoices/all/", InvoicesAdminViewSet.as_view({"get": "all"}), name="all_invoices"),
+    path("invoices/invoice-detail/", InvoicesAdminViewSet.as_view({"get": "invoice_detail"}), name="admin_invoice_detail"),
+    path("invoices/issue/", InvoicesAdminViewSet.as_view({"post": "issue"}), name="admin_invoice_issue"),
 ]
