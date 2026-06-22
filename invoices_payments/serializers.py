@@ -308,6 +308,8 @@ def _create_invoice(
 # Genera una factura EMITIDA a partir de una membresía recién creada
 def generate_membership_invoice(membership):
     membership_type = membership.membership_type
+    now = timezone.now()
+    due_date = now.replace(hour=23, minute=59, second=59, microsecond=0)
     return _create_invoice(
         user=membership.user,
         concept=f'Membresía {membership_type.name} ({membership.start_date.date()} a {membership.end_date.date()})',
@@ -315,7 +317,7 @@ def generate_membership_invoice(membership):
         membership=membership,
         period_start=membership.start_date,
         period_end=membership.end_date,
-        due_date=timezone.now(),
+        due_date=due_date,
     )
 
 
@@ -401,3 +403,55 @@ class RegisterPaymentSerializer(serializers.Serializer):
 
     def to_representation(self, instance):
         return PaymentSerializer(instance).data
+
+
+# region CancelInvoice
+class CancelInvoiceSerializer(serializers.Serializer):
+    id = serializers.IntegerField(required=True)
+    reason = serializers.CharField(max_length=255, required=True)
+
+    def validate(self, data):
+        try:
+            invoice = Invoice.objects.get(pk=data['id'])
+        except Invoice.DoesNotExist:
+            raise serializers.ValidationError({'id': 'Factura no encontrada.'})
+
+        if invoice.state == Invoice.ANULADA:
+            raise serializers.ValidationError('La factura ya está anulada.')
+
+        if invoice.state == Invoice.PAGADA:
+            raise serializers.ValidationError('No se puede anular una factura pagada.')
+
+        self._invoice = invoice
+        return data
+
+    def save(self):
+        invoice = self._invoice
+        invoice.state = Invoice.ANULADA
+        invoice.cancelled_reason = self.validated_data['reason']
+        invoice.save(update_fields=['state', 'cancelled_reason', 'updated_at'])
+        return invoice
+
+    def to_representation(self, instance):
+        return InvoiceDetailSerializer(instance).data
+
+
+# Marca como VENCIDA las facturas EMITIDA con due_date < hoy del usuario
+# Cancela las reservas vinculadas a facturas que pasan a VENCIDA
+def mark_overdue_invoices(user):
+    now = timezone.now()
+    overdue = Invoice.objects.filter(
+        user=user,
+        state=Invoice.EMITIDA,
+        due_date__lt=now,
+    )
+
+    for invoice in overdue:
+        invoice.state = Invoice.VENCIDA
+        invoice.save(update_fields=['state', 'updated_at'])
+
+        # Cancelar reservas vinculadas a esta factura
+        for reservation in invoice.reservations.all():
+            if reservation.state != 'Cancelled':
+                reservation.state = 'Cancelled'
+                reservation.save(update_fields=['state'])

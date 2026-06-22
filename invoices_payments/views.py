@@ -9,6 +9,7 @@ from users.permissions import IsOperatorAdmin
 
 from .models import Invoice, PaymentMethod
 from .serializers import (
+    CancelInvoiceSerializer,
     InvoiceDetailSerializer,
     InvoiceListSerializer,
     IssueInvoiceSerializer,
@@ -225,4 +226,12 @@ class InvoicesAdminViewSet(viewsets.ViewSet):
         if serializer.is_valid():
             payment = serializer.save()
             return Response(serializer.data, status=status.HTTP_201_CREATED)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+    @action(detail=False, methods=['post'], url_path='cancel')
+    def cancel(self, request):
+        serializer = CancelInvoiceSerializer(data=request.data)
+        if serializer.is_valid():
+            invoice = serializer.save()
+            return Response(serializer.data, status=status.HTTP_200_OK)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)

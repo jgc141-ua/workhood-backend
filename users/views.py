@@ -8,7 +8,7 @@ from rest_framework.response import Response
 from rest_framework_simplejwt.views import TokenRefreshView
 
 from config.pagination import Pagination
-from invoices_payments.serializers import generate_membership_invoice
+from invoices_payments.serializers import generate_membership_invoice, mark_overdue_invoices
 from .models import Benefit, CustomUser, Membership, Membership_Type, Resource, Resource_Type
 from .permissions import IsOperatorAdmin
 from .serializers import (
@@ -46,6 +46,9 @@ class UserViewSet(viewsets.ViewSet):
             if user.role != expected_role:
                 user.role = expected_role
                 user.save(update_fields=["role"])
+
+        # Marca facturas vencidas y cancela reservas vinculadas
+        mark_overdue_invoices(user)
 
         serializer = UserSerializer(user)
         return Response(serializer.data)

@@ -98,4 +98,5 @@ urlpatterns = [
     path("invoices/invoice-detail/", InvoicesAdminViewSet.as_view({"get": "invoice_detail"}), name="admin_invoice_detail"),
     path("invoices/issue/", InvoicesAdminViewSet.as_view({"post": "issue"}), name="admin_invoice_issue"),
     path("invoices/register-payment/", InvoicesAdminViewSet.as_view({"post": "register_payment"}), name="register_payment"),
+    path("invoices/cancel/", InvoicesAdminViewSet.as_view({"post": "cancel"}), name="cancel_invoice"),
 ]

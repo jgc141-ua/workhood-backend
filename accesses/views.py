@@ -58,6 +58,25 @@ class AccessViewSet(viewsets.ViewSet):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
+        # Verifica si el usuario tiene facturas de membresía vencidas impagadas
+        from invoices_payments.models import Invoice
+        has_overdue = Invoice.objects.filter(
+            user=user,
+            state=Invoice.VENCIDA,
+            membership__isnull=False,
+        ).exists()
+
+        if has_overdue:
+            access = self._create_access(
+                user,
+                Access.ENTRADA,
+                Access.DENEGADO,
+            )
+            return Response(
+                {"detail": "Acceso denegado. Tienes facturas vencidas pendientes de pago."},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
         membership = self._get_active_membership(user)
 
         if membership:
