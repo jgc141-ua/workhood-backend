@@ -8,7 +8,7 @@ from rest_framework.response import Response
 from rest_framework_simplejwt.views import TokenRefreshView
 
 from config.pagination import Pagination
-from invoices_payments.serializers import generate_membership_invoice, mark_overdue_invoices
+from invoices_payments.serializers import generate_membership_invoice, mark_overdue_invoices, process_renewals_for_user
 from .models import Benefit, CustomUser, Membership, Membership_Type, Resource, Resource_Type
 from .permissions import IsOperatorAdmin
 from .serializers import (
@@ -47,8 +47,9 @@ class UserViewSet(viewsets.ViewSet):
                 user.role = expected_role
                 user.save(update_fields=["role"])
 
-        # Marca facturas vencidas y cancela reservas vinculadas
+        # Marca facturas vencidas, cancela reservas vinculadas y renueva membresías
         mark_overdue_invoices(user)
+        process_renewals_for_user(user)
 
         serializer = UserSerializer(user)
         return Response(serializer.data)
@@ -66,6 +67,13 @@ class UserViewSet(viewsets.ViewSet):
     @action(detail=False, methods=["post"], permission_classes=[AllowAny])
     def signup(self, request):
         data = request.data.copy()
+
+        email = data.get("email", "").strip().lower()
+        if CustomUser.all_objects.filter(email=email).exists():
+            return Response(
+                {"email": "Ya existe una cuenta con este email. Contacta con el operador si crees que es un error."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
 
         if CustomUser.objects.count() == 0:
             data["role"] = "ADMIN"
@@ -446,6 +454,24 @@ class MembershipsViewSet(viewsets.ViewSet):
         serializer = MembershipSerializer(membership)
         return Response(serializer.data)
 
+    # Activa o desactiva la renovación automática de la propia membresía
+    @action(detail=False, methods=["post"], url_path="my-toggle-auto-renew")
+    def my_toggle_auto_renew(self, request):
+        membership = self._get_active_membership(request.user)
+        if not membership:
+            return Response(
+                {"detail": "No tienes una membresía activa."},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        membership.auto_renew = not membership.auto_renew
+        membership.save(update_fields=["auto_renew"])
+
+        return Response(
+            {"detail": f"Renovación automática {'activada' if membership.auto_renew else 'desactivada'}."},
+            status=status.HTTP_200_OK,
+        )
+
     # Lista los recursos disponibles para un tipo de membresía con puesto fijo
     @action(detail=False, methods=["get"], url_path="available-resources")
     def available_resources(self, request):
@@ -545,6 +571,39 @@ class MembershipsViewSet(viewsets.ViewSet):
         user.save(update_fields=["role"])
 
         return Response({"detail": "Membresía cancelada de forma inmediata."}, status=status.HTTP_200_OK)
+
+    # Activa o desactiva la renovación automática de la membresía activa de un usuario
+    @action(detail=False, methods=["post"], url_path="toggle-auto-renew", permission_classes=[IsOperatorAdmin])
+    def toggle_auto_renew(self, request):
+        email = request.data.get("email")
+        if not email:
+            return Response(
+                {"detail": "El campo 'email' es obligatorio."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        try:
+            user = CustomUser.objects.get(email=email)
+        except CustomUser.DoesNotExist:
+            return Response(
+                {"detail": "Usuario no encontrado."},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        membership = self._get_active_membership(user)
+        if not membership:
+            return Response(
+                {"detail": "El usuario no tiene una membresía activa."},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        membership.auto_renew = not membership.auto_renew
+        membership.save(update_fields=["auto_renew"])
+
+        return Response(
+            {"detail": f"Renovación automática {'activada' if membership.auto_renew else 'desactivada'}."},
+            status=status.HTTP_200_OK,
+        )
 
     # Crear una suscripción válida
     def _subscribe(self, user, data):

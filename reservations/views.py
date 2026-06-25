@@ -12,6 +12,7 @@ from config.pagination import Pagination
 from users.models import Resource
 from users.permissions import IsOperatorAdmin
 
+from invoices_payments.models import Invoice
 from .models import Reservation, SpaceSchedule
 from .serializers import (
     ReservationCreateSerializer,
@@ -297,6 +298,12 @@ class ReservationsViewSet(viewsets.ViewSet):
 
         reservation.state = Reservation.CANCELLED
         reservation.save()
+
+        # Anular la factura vinculada si existe y está EMITIDA o VENCIDA
+        if reservation.invoice and reservation.invoice.state in ('EMITIDA', 'VENCIDA'):
+            reservation.invoice.state = Invoice.ANULADA
+            reservation.invoice.cancelled_reason = 'Reserva cancelada por el usuario'
+            reservation.invoice.save(update_fields=['state', 'cancelled_reason', 'updated_at'])
 
         serializer = ReservationSerializer(reservation)
         return Response(serializer.data)

@@ -9,6 +9,7 @@ from config.pagination import Pagination
 from users.models import CustomUser, Membership
 from users.permissions import IsOperatorAdmin
 
+from invoices_payments.models import Invoice
 from .models import Access
 from .serializers import AccessSerializer
 
@@ -59,7 +60,6 @@ class AccessViewSet(viewsets.ViewSet):
             )
 
         # Verifica si el usuario tiene facturas de membresía vencidas impagadas
-        from invoices_payments.models import Invoice
         has_overdue = Invoice.objects.filter(
             user=user,
             state=Invoice.VENCIDA,

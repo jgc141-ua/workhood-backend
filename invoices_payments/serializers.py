@@ -12,6 +12,7 @@ from .models import Invoice, InvoiceItem, Payment, PaymentMethod
 
 
 # Registra un pago sobre una factura y marca PAGADA si cubre el total
+# Si la factura tiene reservas vinculadas, las confirma
 @transaction.atomic
 def register_payment(invoice, amount, method, registered_by=None, reference=None):
     amount = Decimal(str(amount))
@@ -30,6 +31,12 @@ def register_payment(invoice, amount, method, registered_by=None, reference=None
     if invoice.state in (Invoice.EMITIDA, Invoice.VENCIDA) and total_paid >= invoice.total:
         invoice.state = Invoice.PAGADA
         invoice.save(update_fields=['state', 'updated_at'])
+
+        # Confirmar reservas vinculadas a esta factura
+        for reservation in invoice.reservations.all():
+            if reservation.state == 'Pending':
+                reservation.state = 'Confirmed'
+                reservation.save(update_fields=['state'])
 
     return payment
 
@@ -430,6 +437,16 @@ class CancelInvoiceSerializer(serializers.Serializer):
         invoice.state = Invoice.ANULADA
         invoice.cancelled_reason = self.validated_data['reason']
         invoice.save(update_fields=['state', 'cancelled_reason', 'updated_at'])
+
+        # Si la factura tiene membresía vinculada, cancelarla
+        if invoice.membership:
+            invoice.membership.is_active = False
+            invoice.membership.end_date = timezone.now()
+            invoice.membership.save(update_fields=['is_active', 'end_date'])
+
+            invoice.membership.user.role = 'MIEMBRO_ITINERANTE'
+            invoice.membership.user.save(update_fields=['role'])
+
         return invoice
 
     def to_representation(self, instance):
@@ -455,3 +472,59 @@ def mark_overdue_invoices(user):
             if reservation.state != 'Cancelled':
                 reservation.state = 'Cancelled'
                 reservation.save(update_fields=['state'])
+
+        # Si la factura tiene membresía vinculada, cancelarla
+        if invoice.membership:
+            invoice.membership.is_active = False
+            invoice.membership.end_date = timezone.now()
+            invoice.membership.save(update_fields=['is_active', 'end_date'])
+
+            invoice.membership.user.role = 'MIEMBRO_ITINERANTE'
+            invoice.membership.user.save(update_fields=['role'])
+
+
+# Renueva membresías con auto_renew=True cuyo end_date ya ha pasado
+# Crea nueva membresía + factura. No duplica si ya se renovó
+@transaction.atomic
+def process_renewals_for_user(user):
+    from users.models import Membership
+
+    now = timezone.now()
+    expired = Membership.objects.filter(
+        user=user,
+        is_active=True,
+        auto_renew=True,
+        end_date__lte=now,
+    ).order_by('end_date')
+
+    for membership in expired:
+        # Si ya existe una membresía posterior, no renovar
+        already_renewed = Membership.objects.filter(
+            user=user,
+            start_date__gte=membership.end_date,
+        ).exists()
+
+        if already_renewed:
+            # Marcar la vieja como inactiva
+            membership.is_active = False
+            membership.save(update_fields=['is_active'])
+            continue
+
+        # Marcar la vieja como inactiva
+        membership.is_active = False
+        membership.save(update_fields=['is_active'])
+
+        # Crear nueva membresía (30 días)
+        new_membership = Membership.objects.create(
+            user=user,
+            membership_type=membership.membership_type,
+            resource=membership.resource,
+            price=membership.membership_type.monthly_price,
+            start_date=now,
+            end_date=now + timedelta(days=30),
+            is_active=True,
+            auto_renew=True,
+        )
+
+        # Generar factura de la nueva membresía
+        generate_membership_invoice(new_membership)

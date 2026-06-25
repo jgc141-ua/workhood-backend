@@ -260,6 +260,7 @@ class MemberListSerializer(serializers.ModelSerializer):
             "membership_type_name": membership.membership_type.name,
             "resource_name": membership.resource.name if membership.resource else None,
             "end_date": membership.end_date,
+            "auto_renew": membership.auto_renew,
         }
 
 

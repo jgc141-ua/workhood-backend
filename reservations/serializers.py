@@ -5,6 +5,7 @@ from django.db import models, transaction
 from django.utils import timezone
 from rest_framework import serializers
 
+from invoices_payments.serializers import _create_invoice
 from .models import Reservation, SpaceSchedule
 
 
@@ -46,6 +47,8 @@ class SpaceScheduleSerializer(serializers.ModelSerializer):
 class ReservationSerializer(serializers.ModelSerializer):
     resource_name = serializers.CharField(source='resource.name', read_only=True)
     user_email = serializers.CharField(source='user.email', read_only=True)
+    invoice_state = serializers.CharField(source='invoice.state', read_only=True, default=None)
+    invoice_id = serializers.IntegerField(source='invoice.id', read_only=True, default=None)
 
     class Meta:
         model = Reservation
@@ -64,6 +67,9 @@ class ReservationSerializer(serializers.ModelSerializer):
             'resource',
             'resource_name',
             'membership',
+            'invoice',
+            'invoice_id',
+            'invoice_state',
         ]
         read_only_fields = [
             'id',
@@ -73,6 +79,7 @@ class ReservationSerializer(serializers.ModelSerializer):
             'user',
             'user_email',
             'membership',
+            'invoice',
             'total_price',
         ]
 
@@ -101,7 +108,10 @@ class ReservationCreateSerializer(serializers.ModelSerializer):
         recurrence_end_date = data.get('recurrence_end_date')
 
         if start_time < timezone.now():
-            raise serializers.ValidationError("No se puede reservar en el pasado.")
+                raise serializers.ValidationError("No se puede reservar en el pasado.")
+
+        if start_time < timezone.now() + timedelta(hours=3):
+            raise serializers.ValidationError("La reserva debe hacerse con al menos 3 horas de antelación.")
 
         if start_time >= end_time:
             raise serializers.ValidationError("La fecha de inicio debe ser anterior a la fecha de fin.")
@@ -167,20 +177,51 @@ class ReservationCreateSerializer(serializers.ModelSerializer):
             self._validate_space_schedule(occ_start, occ_end)
             self._validate_no_overlap(resource, occ_start, occ_end)
 
-        # Crea todas las reservas con su precio calculado
+        # Crea todas las reservas con su precio calculado y factura
         created_reservations = []
         for occ_start, occ_end in occurrences:
             total_price = self._calculate_total_price(resource, occ_start, occ_end)
-            reservation = Reservation.objects.create(
-                user=user,
-                resource=resource,
-                start_time=occ_start,
-                end_time=occ_end,
-                reservation_type=reservation_type,
-                recurrence_end_date=recurrence_end_date,
-                total_price=total_price,
-                state=Reservation.CONFIRMED,
-            )
+
+            # Si el recurso es gratuito, la reserva se confirma sin factura
+            if total_price <= 0:
+                reservation = Reservation.objects.create(
+                    user=user,
+                    resource=resource,
+                    start_time=occ_start,
+                    end_time=occ_end,
+                    reservation_type=reservation_type,
+                    recurrence_end_date=recurrence_end_date,
+                    total_price=total_price,
+                    state=Reservation.CONFIRMED,
+                )
+            else:
+                # Crea la reserva en estado PENDING
+                reservation = Reservation.objects.create(
+                    user=user,
+                    resource=resource,
+                    start_time=occ_start,
+                    end_time=occ_end,
+                    reservation_type=reservation_type,
+                    recurrence_end_date=recurrence_end_date,
+                    total_price=total_price,
+                    state=Reservation.PENDING,
+                )
+
+                # Genera la factura de la reserva
+                from django.utils import timezone
+                from datetime import timedelta as _td
+                due_date = timezone.now() + _td(hours=1)
+                invoice = _create_invoice(
+                    user=user,
+                    concept=f'Reserva {resource.name} ({occ_start.strftime("%d/%m/%Y %H:%M")} a {occ_end.strftime("%d/%m/%Y %H:%M")})',
+                    amount=total_price,
+                    due_date=due_date,
+                )
+
+                # Vincula la factura a la reserva
+                reservation.invoice = invoice
+                reservation.save(update_fields=['invoice'])
+
             created_reservations.append(reservation)
 
         # Devuelve la primera reserva creada

@@ -32,11 +32,13 @@ urlpatterns = [
     # region Memberships
     # Operaciones sobre membresías de usuarios
     path("memberships/my-membership/", MembershipsViewSet.as_view({"get": "my_membership"}), name="my_membership"),
+    path("memberships/my-toggle-auto-renew/", MembershipsViewSet.as_view({"post": "my_toggle_auto_renew"}), name="my_toggle_auto_renew"),
     path("memberships/available-resources/", MembershipsViewSet.as_view({"get": "available_resources"}), name="available_resources"),
     path("memberships/subscribe/", MembershipsViewSet.as_view({"post": "subscribe"}), name="subscribe"),
     path("memberships/member-membership/", MembershipsViewSet.as_view({"get": "member_membership"}), name="member_membership"),
     path("memberships/subscribe-member/", MembershipsViewSet.as_view({"post": "subscribe_member"}), name="subscribe_member"),
     path("memberships/cancel-membership/", MembershipsViewSet.as_view({"post": "cancel_membership"}), name="cancel_membership"),
+    path("memberships/toggle-auto-renew/", MembershipsViewSet.as_view({"post": "toggle_auto_renew"}), name="toggle_auto_renew"),
 
     # region Benefits
     # Gestión de beneficios incluidos en membresías
