@@ -1,4 +1,5 @@
-from django.db.models import ProtectedError, Q
+from django.db.models import ProtectedError
+from django.http import HttpResponse
 from rest_framework import status, viewsets
 from rest_framework.decorators import action
 from rest_framework.permissions import IsAuthenticated
@@ -8,6 +9,7 @@ from config.pagination import Pagination
 from users.permissions import IsOperatorAdmin
 
 from .models import Invoice, PaymentMethod
+from .pdf import render_invoice_pdf
 from .serializers import (
     CancelInvoiceSerializer,
     InvoiceDetailSerializer,
@@ -161,6 +163,24 @@ class InvoicesMemberViewSet(viewsets.ViewSet):
             return Response(serializer.data, status=status.HTTP_201_CREATED)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
+    @action(detail=False, methods=['get'], url_path='my-pdf')
+    def my_pdf(self, request):
+        pk = request.query_params.get('id')
+        if not pk:
+            return Response(
+                {'detail': "El parámetro 'id' es obligatorio."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        invoice = self._get_owned_invoice(request, pk)
+        if not invoice:
+            return Response(
+                {'detail': 'Factura no encontrada.'},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+        
+        return _get_pdf(invoice)
+
 
 # region Invoices (Operador)
 class InvoicesAdminViewSet(viewsets.ViewSet):
@@ -235,3 +255,28 @@ class InvoicesAdminViewSet(viewsets.ViewSet):
             invoice = serializer.save()
             return Response(InvoiceDetailSerializer(invoice).data, status=status.HTTP_200_OK)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+    @action(detail=False, methods=['get'], url_path='pdf')
+    def pdf(self, request):
+        pk = request.query_params.get('id')
+        if not pk:
+            return Response(
+                {'detail': "El parámetro 'id' es obligatorio."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        try:
+            invoice = Invoice.objects.get(pk=pk)
+        except Invoice.DoesNotExist:
+            return Response(
+                {'detail': 'Factura no encontrada.'},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        return _get_pdf(invoice)
+
+def _get_pdf(invoice):
+    pdf = render_invoice_pdf(invoice)
+    response = HttpResponse(pdf, content_type='application/pdf')
+    response['Content-Disposition'] = f'attachment; filename="{invoice.invoice_number}.pdf"'
+    return response
