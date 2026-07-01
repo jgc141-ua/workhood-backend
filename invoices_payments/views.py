@@ -41,6 +41,12 @@ class PaymentMethodsViewSet(viewsets.ViewSet):
         queryset = self.get_queryset().order_by('name')
         serializer = PaymentMethodSerializer(queryset, many=True)
         return Response(serializer.data)
+    
+    @action(detail=False, methods=['get'], url_path='all-visible')
+    def all_visible(self, request):
+        queryset = self.get_queryset().filter(member_visible=True).order_by('name')
+        serializer = PaymentMethodSerializer(queryset, many=True)
+        return Response(serializer.data)
 
     @action(detail=False, methods=['post'], url_path='create')
     def create(self, request):

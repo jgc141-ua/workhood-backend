@@ -58,6 +58,7 @@ urlpatterns = [
     # region Resources
     # Gestión de recursos concretos
     path("resources/all/", ResourcesViewSet.as_view({"get": "all"}), name="all_resources"),
+    path("resources/bookable/", ResourcesViewSet.as_view({"get": "all_bookable"}), name="all_bookable_resources"),
     path("resources/create/", ResourcesViewSet.as_view({"post": "create"}), name="create_resource"),
     path("resources/update/", ResourcesViewSet.as_view({"put": "update", "patch": "update"}), name="update_resource"),
     path("resources/delete/", ResourcesViewSet.as_view({"delete": "delete"}), name="delete_resource"),
@@ -98,6 +99,7 @@ urlpatterns = [
     # region PaymentMethods
     # Gestión de métodos de pago
     path("payment-methods/all/", PaymentMethodsViewSet.as_view({"get": "all"}), name="all_payment_methods"),
+    path("payment-methods/all-visible/", PaymentMethodsViewSet.as_view({"get": "all_visible"}), name="all_visible_payment_methods"),
     path("payment-methods/create/", PaymentMethodsViewSet.as_view({"post": "create"}), name="create_payment_method"),
     path("payment-methods/update/", PaymentMethodsViewSet.as_view({"put": "update", "patch": "update"}), name="update_payment_method"),
     path("payment-methods/delete/", PaymentMethodsViewSet.as_view({"delete": "delete"}), name="delete_payment_method"),

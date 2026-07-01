@@ -358,7 +358,7 @@ class RevenueExportTests(APITestCase):
         self.client.force_authenticate(user=self.admin)
         response = self.client.get(reverse('reports_revenue_export'))
         self.assertEqual(response.status_code, status.HTTP_200_OK)
-        self.assertEqual(response['Content-Type'], 'text/csv charset=utf-8')
+        self.assertEqual(response['Content-Type'], 'text/csv; charset=utf-8')
         self.assertIn('attachment', response['Content-Disposition'])
         content = response.content.decode('utf-8-sig')
         self.assertIn('TOTAL', content)

@@ -313,7 +313,7 @@ def generate_membership_invoice(membership):
     due_date = now.replace(hour=23, minute=59, second=59, microsecond=0)
     return _create_invoice(
         user=membership.user,
-        concept=f'Membresía {membership_type.name} ({membership.start_date.date()} a {membership.end_date.date()})',
+        concept=f'Membresía {membership_type.name} ({membership.start_date.date().strftime('%d-%m-%Y')} a {membership.end_date.date().strftime('%d-%m-%Y')})',
         amount=membership_type.monthly_price,
         membership=membership,
         period_start=membership.start_date.date(),
@@ -498,9 +498,6 @@ def _mark_overdue_invoices_bulk():
 def _process_renewals_bulk():
     now = timezone.now()
 
-    # Materializar el QuerySet como lista: el bucle final re-evalúa la query
-    # y, si quedase como QuerySet, el update(is_active=False) posterior haría
-    # que no encontrase ninguna fila
     expired = list(
         Membership.objects.filter(
             is_active=True,
@@ -515,9 +512,6 @@ def _process_renewals_bulk():
     expired_ids = [m.id for m in expired]
 
     # IDs de membresías que YA tienen una membresía posterior (ya renovadas)
-    # Evita duplicar renovaciones. Se excluyen las propias expiradas porque
-    # su start_date (en el pasado) es > su end_date, lo que haría que la query
-    # se incluyese a sí misma.
     already_renewed_ids = set(
         Membership.objects.filter(
             user__in=[m.user_id for m in expired],

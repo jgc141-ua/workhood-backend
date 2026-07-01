@@ -372,8 +372,16 @@ class ResourcesViewSet(viewsets.ViewSet):
         return Resource.objects.select_related('resource_type').all()
 
     # Obtener todos los recursos
-    @action(detail=False, methods=["get"], url_path="all")
+    @action(detail=False, methods=["get"], url_path="all", permission_classes=[IsOperatorAdmin])
     def all(self, request):
+        queryset = self.get_queryset().order_by("name")
+        paginator = Pagination()
+        page = paginator.paginate_queryset(queryset, request)
+        serializer = ResourceSerializer(page, many=True)
+        return paginator.get_paginated_response(serializer.data)
+    
+    @action(detail=False, methods=["get"], url_path="bookable")
+    def all_bookable(self, request):
         queryset = self.get_queryset().filter(is_bookable=True).order_by("name")
         paginator = Pagination()
         page = paginator.paginate_queryset(queryset, request)
