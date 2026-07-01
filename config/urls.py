@@ -3,6 +3,7 @@ from rest_framework_simplejwt.views import TokenObtainPairView
 from users.views import BenefitsViewSet, MembershipsViewSet, MembershipTypesViewSet, MembersViewSet, ResourcesViewSet, ResourceTypesViewSet, UserViewSet, CustomTokenRefreshView
 from reservations.views import ReservationsViewSet, SpaceScheduleViewSet
 from accesses.views import AccessViewSet
+from analytics.views import OccupancyViewSet, ReportsViewSet
 from invoices_payments.views import InvoicesAdminViewSet, InvoicesMemberViewSet, PaymentMethodsViewSet
 
 # Rutas principales de la API de WorkHood
@@ -82,6 +83,17 @@ urlpatterns = [
     path("accesses/check-out/", AccessViewSet.as_view({"post": "check_out"}), name="access_check_out"),
     path("accesses/logs/", AccessViewSet.as_view({"get": "logs"}), name="access_logs"),
     path("accesses/my-logs/", AccessViewSet.as_view({"get": "my_logs"}), name="access_my_logs"),
+
+    # region Occupancy
+    path("occupancy/current/", OccupancyViewSet.as_view({"get": "current"}), name="occupancy_current"),
+    path("occupancy/active-reservations/", OccupancyViewSet.as_view({"get": "active_reservations"}), name="occupancy_active_reservations"),
+    path("occupancy/daily-evolution/", OccupancyViewSet.as_view({"get": "daily_evolution"}), name="occupancy_daily_evolution"),
+    path("occupancy/users-summary/", OccupancyViewSet.as_view({"get": "users_summary"}), name="occupancy_users_summary"),
+    path("occupancy/resources-summary/", OccupancyViewSet.as_view({"get": "resources_summary"}), name="occupancy_resources_summary"),
+
+    # region Reports
+    path("reports/revenue/", ReportsViewSet.as_view({"get": "revenue"}), name="reports_revenue"),
+    path("reports/revenue-export/", ReportsViewSet.as_view({"get": "revenue_export"}), name="reports_revenue_export"),
 
     # region PaymentMethods
     # Gestión de métodos de pago

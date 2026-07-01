@@ -9,6 +9,7 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 
 from config.pagination import Pagination
+from config.timezone import to_utc
 from users.models import Resource
 from users.permissions import IsOperatorAdmin
 
@@ -138,11 +139,11 @@ class ReservationsViewSet(viewsets.ViewSet):
         except Resource.DoesNotExist:
             return Response({"detail": "Recurso no encontrado."}, status=status.HTTP_404_NOT_FOUND)
 
-        if not resource.is_active or not resource.availability:
+        if not resource.is_active or not resource.availability or not resource.is_bookable:
             return Response({"available": False, "reason": "El recurso no está disponible."})
 
-        start_time = parse_datetime(start_time_str)
-        end_time = parse_datetime(end_time_str)
+        start_time = to_utc(parse_datetime(start_time_str))
+        end_time = to_utc(parse_datetime(end_time_str))
 
         if not start_time or not end_time:
             return Response({"detail": "Formato de fecha inválido."}, status=status.HTTP_400_BAD_REQUEST)

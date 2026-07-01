@@ -6,9 +6,10 @@ from rest_framework.filters import OrderingFilter, SearchFilter
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 from rest_framework_simplejwt.views import TokenRefreshView
+from django.contrib.auth import get_user_model
 
 from config.pagination import Pagination
-from invoices_payments.serializers import generate_membership_invoice, mark_overdue_invoices, process_renewals_for_user
+from invoices_payments.serializers import generate_membership_invoice, process_pending_invoices
 from .models import Benefit, CustomUser, Membership, Membership_Type, Resource, Resource_Type
 from .permissions import IsOperatorAdmin
 from .serializers import (
@@ -25,6 +26,7 @@ from .serializers import (
     CustomTokenRefreshSerializer
 )
 
+User = get_user_model()
 
 # region User
 class UserViewSet(viewsets.ViewSet):
@@ -48,8 +50,7 @@ class UserViewSet(viewsets.ViewSet):
                 user.save(update_fields=["role"])
 
         # Marca facturas vencidas, cancela reservas vinculadas y renueva membresías
-        mark_overdue_invoices(user)
-        process_renewals_for_user(user)
+        process_pending_invoices() # Si se quiere escalar a miles se debería tener un cron cada cierto tiempo
 
         serializer = UserSerializer(user)
         return Response(serializer.data)
@@ -371,9 +372,9 @@ class ResourcesViewSet(viewsets.ViewSet):
         return Resource.objects.select_related('resource_type').all()
 
     # Obtener todos los recursos
-    @action(detail=False, methods=["get"], url_path="all", permission_classes=[IsOperatorAdmin])
+    @action(detail=False, methods=["get"], url_path="all")
     def all(self, request):
-        queryset = self.get_queryset().order_by("name")
+        queryset = self.get_queryset().filter(is_bookable=True).order_by("name")
         paginator = Pagination()
         page = paginator.paginate_queryset(queryset, request)
         serializer = ResourceSerializer(page, many=True)

@@ -48,6 +48,7 @@ INSTALLED_APPS = [
     'reservations',
     'accesses',
     'invoices_payments',
+    'analytics',
 ]
 
 AUTH_USER_MODEL = 'users.CustomUser'

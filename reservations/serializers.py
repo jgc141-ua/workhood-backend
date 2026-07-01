@@ -6,6 +6,8 @@ from django.utils import timezone
 from rest_framework import serializers
 
 from invoices_payments.serializers import _create_invoice
+from users.models import CustomUser
+from config.serializer_fields import LocalDateTimeField
 from .models import Reservation, SpaceSchedule
 
 
@@ -86,6 +88,13 @@ class ReservationSerializer(serializers.ModelSerializer):
 
 # region ReservationCreate
 class ReservationCreateSerializer(serializers.ModelSerializer):
+    # Email del miembro para el que se crea la reserva. Solo lo usan los admins
+    user_email = serializers.EmailField(required=False, allow_blank=False, write_only=True)
+
+    start_time = LocalDateTimeField()
+    end_time = LocalDateTimeField()
+    recurrence_end_date = LocalDateTimeField(required=False, allow_null=True)
+
     class Meta:
         model = Reservation
         fields = [
@@ -94,11 +103,19 @@ class ReservationCreateSerializer(serializers.ModelSerializer):
             'end_time',
             'reservation_type',
             'recurrence_end_date',
+            'user_email',
         ]
 
     def validate_resource(self, value):
-        if not value.is_active or not value.availability:
+        if not value.is_active or not value.availability or not value.is_bookable:
             raise serializers.ValidationError("El recurso seleccionado no está disponible.")
+        return value
+
+    def validate_user_email(self, value):
+        request = self.context.get('request')
+        if request and request.user.is_authenticated and request.user.role == CustomUser.ADMIN:
+            if not CustomUser.objects.filter(email=value).exists():
+                raise serializers.ValidationError("No existe ningún miembro con ese email.")
         return value
 
     def validate(self, data):
@@ -160,7 +177,16 @@ class ReservationCreateSerializer(serializers.ModelSerializer):
 
     @transaction.atomic
     def create(self, validated_data):
-        user = self.context['request'].user
+        request = self.context['request']
+        user_email = validated_data.pop('user_email', None)
+
+        # Si es admin y ha indicado un email, la reserva se asigna a ese miembro.
+        # En caso contrario, la reserva se asigna al propio usuario autenticado.
+        if request.user.role == CustomUser.ADMIN and user_email:
+            user = CustomUser.objects.get(email=user_email)
+        else:
+            user = request.user
+
         resource = validated_data['resource']
         start_time = validated_data['start_time']
         end_time = validated_data['end_time']
@@ -213,7 +239,7 @@ class ReservationCreateSerializer(serializers.ModelSerializer):
                 due_date = timezone.now() + _td(hours=1)
                 invoice = _create_invoice(
                     user=user,
-                    concept=f'Reserva {resource.name} ({occ_start.strftime("%d/%m/%Y %H:%M")} a {occ_end.strftime("%d/%m/%Y %H:%M")})',
+                    concept=f'Reserva {resource.name} ({occ_start.strftime("%d-%m-%Y %H:%M")} a {occ_end.strftime("%d-%m-%Y %H:%M")})',
                     amount=total_price,
                     due_date=due_date,
                 )

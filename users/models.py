@@ -153,6 +153,7 @@ class Resource(SoftDeleteModel):
     price = models.DecimalField(max_digits=8, decimal_places=2, default=0)
     availability = models.BooleanField(default=True)
     is_active = models.BooleanField(default=True)
+    is_bookable = models.BooleanField(default=True)
 
     # Fechas de control
     created_at = models.DateTimeField(auto_now_add=True)

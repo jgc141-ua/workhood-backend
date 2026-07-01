@@ -224,16 +224,18 @@
     <div class="meta">
         <div class="meta-item">
             <div class="label">Fecha de emisión</div>
-            <div class="value">{{ invoice.issue_date|date:"d/m/Y" }}</div>
+            <div class="value">{{ invoice.issue_date|date:"d/m/Y H:i" }}</div>
         </div>
         <div class="meta-item">
             <div class="label">Fecha de vencimiento</div>
-            <div class="value">{{ invoice.due_date|date:"d/m/Y" }}</div>
+            <div class="value">{{ invoice.due_date|date:"d/m/Y H:i" }}</div>
         </div>
+        {% if invoice.membership %}
         <div class="meta-item">
             <div class="label">Periodo</div>
             <div class="value">{{ invoice.period_start|date:"d/m/Y" }} - {{ invoice.period_end|date:"d/m/Y" }}</div>
         </div>
+        {% endif %}
     </div>
 
     <table>

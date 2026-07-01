@@ -507,6 +507,7 @@ class ResourceSerializer(serializers.ModelSerializer):
             "price",
             "availability",
             "is_active",
+            "is_bookable",
             "resource_type",
             "resource_type_name",
         )
@@ -519,6 +520,7 @@ class ResourceSerializer(serializers.ModelSerializer):
             'price': {'required': False},
             'availability': {'required': False},
             'is_active': {'required': False},
+            'is_bookable': {'required': False},
             'resource_type': {'required': True},
         }
 

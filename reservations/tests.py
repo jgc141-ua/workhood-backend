@@ -354,3 +354,89 @@ class ReservationListTests(APITestCase):
         self.client.force_authenticate(user=admin)
         response = self.client.get(reverse('all_reservations'))
         self.assertEqual(response.status_code, status.HTTP_200_OK)
+
+
+class AdminReservationCreateTests(APITestCase):
+    def setUp(self):
+        self.admin = _make_user(email='admin@test.com', role=CustomUser.ADMIN)
+        self.member = _make_user(email='member@test.com', role=CustomUser.MIEMBRO)
+        self.resource = _make_resource()
+        _make_schedule()
+        self.client.force_authenticate(user=self.admin)
+
+    def _future_slot(self, hour=10):
+        start = (timezone.now() + timedelta(days=1)).replace(
+            hour=hour, minute=0, second=0, microsecond=0
+        )
+        return start, start + timedelta(hours=1)
+
+    # El admin puede crear una reserva para un miembro indicando su email
+    def test_admin_creates_reservation_for_member(self):
+        start, end = self._future_slot(10)
+        data = {
+            'resource': self.resource.id,
+            'start_time': start.isoformat(),
+            'end_time': end.isoformat(),
+            'reservation_type': 'HOURLY',
+            'user_email': 'member@test.com',
+        }
+        response = self.client.post(reverse('create_reservation'), data, format='json')
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(response.data['user_email'], 'member@test.com')
+        self.assertTrue(
+            Reservation.objects.filter(user=self.member, resource=self.resource).exists()
+        )
+        self.assertFalse(
+            Reservation.objects.filter(user=self.admin, resource=self.resource).exists()
+        )
+
+    # Sin user_email la reserva se asigna al propio admin
+    def test_admin_without_user_email_creates_for_self(self):
+        start, end = self._future_slot(10)
+        data = {
+            'resource': self.resource.id,
+            'start_time': start.isoformat(),
+            'end_time': end.isoformat(),
+            'reservation_type': 'HOURLY',
+        }
+        response = self.client.post(reverse('create_reservation'), data, format='json')
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.assertTrue(
+            Reservation.objects.filter(user=self.admin, resource=self.resource).exists()
+        )
+
+    # Un email inexistente devuelve 400
+    def test_admin_with_invalid_user_email_returns_400(self):
+        start, end = self._future_slot(10)
+        data = {
+            'resource': self.resource.id,
+            'start_time': start.isoformat(),
+            'end_time': end.isoformat(),
+            'reservation_type': 'HOURLY',
+            'user_email': 'noexiste@test.com',
+        }
+        response = self.client.post(reverse('create_reservation'), data, format='json')
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn('user_email', response.data)
+
+    # Un miembro que envía user_email lo ve ignorado: la reserva es para sí mismo
+    def test_member_user_email_is_ignored(self):
+        _make_membership(self.member)
+        other = _make_user(email='other@test.com', role=CustomUser.MIEMBRO)
+        start, end = self._future_slot(10)
+        data = {
+            'resource': self.resource.id,
+            'start_time': start.isoformat(),
+            'end_time': end.isoformat(),
+            'reservation_type': 'HOURLY',
+            'user_email': 'other@test.com',
+        }
+        self.client.force_authenticate(user=self.member)
+        response = self.client.post(reverse('create_reservation'), data, format='json')
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.assertTrue(
+            Reservation.objects.filter(user=self.member, resource=self.resource).exists()
+        )
+        self.assertFalse(
+            Reservation.objects.filter(user=other, resource=self.resource).exists()
+        )

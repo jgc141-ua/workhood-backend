@@ -9,6 +9,8 @@ from rest_framework import serializers
 from users.models import CustomUser
 
 from .models import Invoice, InvoiceItem, Payment, PaymentMethod
+from reservations.models import Reservation
+from users.models import CustomUser, Membership
 
 
 # Registra un pago sobre una factura y marca PAGADA si cubre el total
@@ -256,14 +258,6 @@ def _create_invoice(
     iva_amount = (amount * iva_rate).quantize(Decimal('0.01'))
     total = (amount + iva_amount).quantize(Decimal('0.01'))
 
-    if period_start is None:
-        period_start = timezone.now().date()
-    if hasattr(period_start, 'date'):
-        period_start = period_start.date()
-    if period_end is None:
-        period_end = (timezone.now() + timedelta(days=30)).date()
-    if hasattr(period_end, 'date'):
-        period_end = period_end.date()
     if due_date is None:
         due_date = timezone.now() + timedelta(days=7)
 
@@ -322,8 +316,8 @@ def generate_membership_invoice(membership):
         concept=f'Membresía {membership_type.name} ({membership.start_date.date()} a {membership.end_date.date()})',
         amount=membership_type.monthly_price,
         membership=membership,
-        period_start=membership.start_date,
-        period_end=membership.end_date,
+        period_start=membership.start_date.date(),
+        period_end=membership.end_date.date(),
         due_date=due_date,
     )
 
@@ -452,71 +446,98 @@ class CancelInvoiceSerializer(serializers.Serializer):
     def to_representation(self, instance):
         return InvoiceDetailSerializer(instance).data
 
-
-# Marca como VENCIDA las facturas EMITIDA con due_date < hoy del usuario
+# region Facturas vencidas
+# Marca como VENCIDA las facturas EMITIDA con due_date < hoy
 # Cancela las reservas vinculadas a facturas que pasan a VENCIDA
-def mark_overdue_invoices(user):
+@transaction.atomic
+def _mark_overdue_invoices_bulk():
     now = timezone.now()
-    overdue = Invoice.objects.filter(
-        user=user,
-        state=Invoice.EMITIDA,
-        due_date__lt=now,
+
+    # IDs de facturas que pasan a VENCIDA
+    overdue_ids = list(
+        Invoice.objects.filter(
+            state=Invoice.EMITIDA,
+            due_date__lt=now,
+        ).values_list('id', flat=True)
+    )
+    if not overdue_ids:
+        return
+
+    # Facturas
+    Invoice.objects.filter(id__in=overdue_ids).update(
+        state=Invoice.VENCIDA,
+        updated_at=now,
     )
 
-    for invoice in overdue:
-        invoice.state = Invoice.VENCIDA
-        invoice.save(update_fields=['state', 'updated_at'])
+    # Rservas
+    Reservation.objects.filter(
+        invoice__id__in=overdue_ids
+    ).exclude(state='Cancelled').update(state='Cancelled')
 
-        # Cancelar reservas vinculadas a esta factura
-        for reservation in invoice.reservations.all():
-            if reservation.state != 'Cancelled':
-                reservation.state = 'Cancelled'
-                reservation.save(update_fields=['state'])
+    # Membresías
+    membership_ids = list(
+        Invoice.objects.filter(id__in=overdue_ids)
+        .exclude(membership__isnull=True)
+        .values_list('membership_id', flat=True)
+        .distinct()
+    )
+    if membership_ids:
+        Membership.objects.filter(id__in=membership_ids).update(
+            is_active=False,
+            end_date=now,
+        )
+        # Roles
+        CustomUser.objects.filter(
+            user_membership__id__in=membership_ids
+        ).update(role=CustomUser.MIEMBRO_ITINERANTE)
 
-        # Si la factura tiene membresía vinculada, cancelarla
-        if invoice.membership:
-            invoice.membership.is_active = False
-            invoice.membership.end_date = timezone.now()
-            invoice.membership.save(update_fields=['is_active', 'end_date'])
-
-            invoice.membership.user.role = 'MIEMBRO_ITINERANTE'
-            invoice.membership.user.save(update_fields=['role'])
-
-
+# region Renovación
 # Renueva membresías con auto_renew=True cuyo end_date ya ha pasado
 # Crea nueva membresía + factura. No duplica si ya se renovó
 @transaction.atomic
-def process_renewals_for_user(user):
-    from users.models import Membership
-
+def _process_renewals_bulk():
     now = timezone.now()
-    expired = Membership.objects.filter(
-        user=user,
-        is_active=True,
-        auto_renew=True,
-        end_date__lte=now,
-    ).order_by('end_date')
 
+    # Materializar el QuerySet como lista: el bucle final re-evalúa la query
+    # y, si quedase como QuerySet, el update(is_active=False) posterior haría
+    # que no encontrase ninguna fila
+    expired = list(
+        Membership.objects.filter(
+            is_active=True,
+            auto_renew=True,
+            end_date__lte=now,
+        ).select_related('user', 'membership_type', 'resource')
+    )
+
+    if not expired:
+        return
+
+    expired_ids = [m.id for m in expired]
+
+    # IDs de membresías que YA tienen una membresía posterior (ya renovadas)
+    # Evita duplicar renovaciones. Se excluyen las propias expiradas porque
+    # su start_date (en el pasado) es > su end_date, lo que haría que la query
+    # se incluyese a sí misma.
+    already_renewed_ids = set(
+        Membership.objects.filter(
+            user__in=[m.user_id for m in expired],
+            start_date__gt=models.F('user__user_membership__end_date'),
+        ).exclude(
+            id__in=expired_ids,
+        ).values_list('id', flat=True)
+    )
+
+    # Marcar TODAS las expiradas como inactivas de una vez
+    Membership.objects.filter(id__in=expired_ids).update(is_active=False)
+
+    # Solo crear nuevas para las que no tienen renovación previa
+    new_memberships = []
     for membership in expired:
-        # Si ya existe una membresía posterior, no renovar
-        already_renewed = Membership.objects.filter(
-            user=user,
-            start_date__gte=membership.end_date,
-        ).exists()
-
-        if already_renewed:
-            # Marcar la vieja como inactiva
-            membership.is_active = False
-            membership.save(update_fields=['is_active'])
+        if membership.id in already_renewed_ids:
             continue
 
-        # Marcar la vieja como inactiva
-        membership.is_active = False
-        membership.save(update_fields=['is_active'])
-
-        # Crear nueva membresía (30 días)
-        new_membership = Membership.objects.create(
-            user=user,
+        new_memberships.append(Membership(
+            user=membership.user,
             membership_type=membership.membership_type,
             resource=membership.resource,
             price=membership.membership_type.monthly_price,
@@ -524,7 +545,16 @@ def process_renewals_for_user(user):
             end_date=now + timedelta(days=30),
             is_active=True,
             auto_renew=True,
-        )
+        ))
 
-        # Generar factura de la nueva membresía
+    # Crear todas las membresías nuevas en una sola query
+    created = Membership.objects.bulk_create(new_memberships)
+
+    # Generar facturas para cada nueva membresía
+    for new_membership in created:
         generate_membership_invoice(new_membership)
+
+# Procesar facturas y renovaciones
+def process_pending_invoices():
+    _mark_overdue_invoices_bulk()
+    _process_renewals_bulk()

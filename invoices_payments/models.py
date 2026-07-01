@@ -77,8 +77,8 @@ class Invoice(models.Model):
     # Fechas
     issue_date = models.DateTimeField(auto_now_add=True)
     due_date = models.DateTimeField()
-    period_start = models.DateField()
-    period_end = models.DateField()
+    period_start = models.DateField(null=True, blank=True)
+    period_end = models.DateField(null=True, blank=True)
 
     # Estado
     state = models.CharField(max_length=10, choices=STATE_CHOICES, default=EMITIDA)

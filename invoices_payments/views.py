@@ -8,6 +8,8 @@ from rest_framework.response import Response
 from config.pagination import Pagination
 from users.permissions import IsOperatorAdmin
 
+from invoices_payments.serializers import process_pending_invoices
+
 from .models import Invoice, PaymentMethod
 from .pdf import render_invoice_pdf
 from .serializers import (
@@ -28,13 +30,19 @@ class PaymentMethodsViewSet(viewsets.ViewSet):
     def get_queryset(self):
         return PaymentMethod.objects.all()
 
-    @action(detail=False, methods=['get'], url_path='all', permission_classes=[IsOperatorAdmin])
+    def get_permissions(self):
+        # Las acciones de gestión del operador requieren rol ADMIN.
+        if self.action in ('all', 'create', 'update', 'delete'):
+            return [IsAuthenticated(), IsOperatorAdmin()]
+        return super().get_permissions()
+
+    @action(detail=False, methods=['get'], url_path='all')
     def all(self, request):
         queryset = self.get_queryset().order_by('name')
         serializer = PaymentMethodSerializer(queryset, many=True)
         return Response(serializer.data)
 
-    @action(detail=False, methods=['post'], url_path='create', permission_classes=[IsOperatorAdmin])
+    @action(detail=False, methods=['post'], url_path='create')
     def create(self, request):
         serializer = PaymentMethodSerializer(data=request.data)
         if serializer.is_valid():
@@ -42,7 +50,7 @@ class PaymentMethodsViewSet(viewsets.ViewSet):
             return Response(serializer.data, status=status.HTTP_201_CREATED)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
-    @action(detail=False, methods=['put', 'patch'], url_path='update', permission_classes=[IsOperatorAdmin])
+    @action(detail=False, methods=['put', 'patch'], url_path='update')
     def update(self, request):
         name = request.data.get('name')
         if not name:
@@ -65,7 +73,7 @@ class PaymentMethodsViewSet(viewsets.ViewSet):
             return Response(serializer.data)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
-    @action(detail=False, methods=['delete'], url_path='delete', permission_classes=[IsOperatorAdmin])
+    @action(detail=False, methods=['delete'], url_path='delete')
     def delete(self, request):
         name = request.data.get('name')
         if not name:
@@ -108,6 +116,9 @@ class InvoicesMemberViewSet(viewsets.ViewSet):
 
     @action(detail=False, methods=['get'], url_path='my')
     def my(self, request):
+        # Marca facturas vencidas, cancela reservas vinculadas y renueva membresías
+        process_pending_invoices()
+
         queryset = Invoice.objects.filter(user=request.user).order_by('-issue_date')
 
         state = request.query_params.get('state')
@@ -188,6 +199,9 @@ class InvoicesAdminViewSet(viewsets.ViewSet):
 
     @action(detail=False, methods=['get'], url_path='all')
     def all(self, request):
+        # Marca facturas vencidas, cancela reservas vinculadas y renueva membresías
+        process_pending_invoices()
+
         queryset = Invoice.objects.all().order_by('-issue_date')
 
         state = request.query_params.get('state')
